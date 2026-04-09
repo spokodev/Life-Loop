@@ -3,61 +3,51 @@ import type { DashboardSnapshot } from '@life-loop/shared-types'
 import { DashboardScreen } from '../components/dashboard-screen'
 import { webEnv } from '../lib/env'
 
-const snapshot: DashboardSnapshot = {
+const fallbackSnapshot: DashboardSnapshot = {
   health: {
-    api: 'healthy',
-    database: 'healthy',
+    api: 'degraded',
+    database: 'degraded',
     worker: 'degraded',
     restoreDrills: 'attention-required',
   },
-  libraries: [
-    {
-      id: 'library-demo',
-      slug: 'personal-archive',
-      name: 'Personal Archive',
-      description: 'Primary single-user MVP library.',
-      assetCount: 0,
-    },
-  ],
   devices: [],
-  storageTargets: [
-    {
-      id: 'target-primary',
-      libraryId: 'library-demo',
-      name: 'Archive SSD',
-      provider: 'LocalDiskProvider',
-      role: 'archive-primary',
-      writable: true,
-      healthy: true,
-      healthState: 'healthy',
-    },
-    {
-      id: 'target-replica',
-      libraryId: 'library-demo',
-      name: 'Replica Drive',
-      provider: 'ExternalDriveProvider',
-      role: 'archive-replica',
-      writable: false,
-      healthy: false,
-      healthState: 'unavailable',
-    },
-  ],
+  libraries: [],
+  storageTargets: [],
   jobs: [],
-  restoreDrills: [
-    {
-      id: 'restore-drill-demo',
-      libraryId: 'library-demo',
-      status: 'scheduled',
-    },
-  ],
+  restoreDrills: [],
 }
 
-export default function HomePage() {
+async function getSnapshot() {
+  try {
+    const response = await fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      throw new Error(`Status endpoint returned ${response.status}`)
+    }
+
+    return {
+      snapshot: (await response.json()) as DashboardSnapshot,
+      usingFallback: false,
+    }
+  } catch {
+    return {
+      snapshot: fallbackSnapshot,
+      usingFallback: true,
+    }
+  }
+}
+
+export default async function HomePage() {
+  const { snapshot, usingFallback } = await getSnapshot()
+
   return (
     <DashboardScreen
       apiBaseUrl={webEnv.NEXT_PUBLIC_API_URL}
       authEnabled={webEnv.clerkEnabled}
       snapshot={snapshot}
+      usingFallback={usingFallback}
     />
   )
 }

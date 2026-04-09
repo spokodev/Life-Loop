@@ -25,12 +25,19 @@ export function DashboardScreen({
   snapshot,
   authEnabled,
   apiBaseUrl,
+  usingFallback,
 }: {
   snapshot: DashboardSnapshot
   authEnabled: boolean
   apiBaseUrl: string
+  usingFallback: boolean
 }) {
   const reducedMotion = useReducedMotion()
+  const hasStorageTargets = snapshot.storageTargets.length > 0
+  const hasDevices = snapshot.devices.length > 0
+  const hasReplicaWarning = snapshot.storageTargets.some(
+    (target) => target.role === 'archive-replica' && !target.healthy,
+  )
 
   return (
     <AppShell
@@ -46,6 +53,14 @@ export function DashboardScreen({
       summary="Calm control plane for archive truth, device health, and cleanup safety. This shell never treats upload completion as archival safety."
       title="Life-Loop"
     >
+      {usingFallback ? (
+        <Banner
+          description="The control plane summary could not be loaded from the API. The shell is showing a conservative fallback state instead of implying healthy archive progress."
+          title="Control plane summary unavailable"
+          tone="danger"
+        />
+      ) : null}
+
       {!authEnabled ? (
         <Banner
           action={<Button variant="secondary">Configure Clerk</Button>}
@@ -56,21 +71,42 @@ export function DashboardScreen({
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <TransitionState
-          description="Primary archive verification is complete, but one replica target is offline. The system must not imply cleanup safety until replica policy is met."
-          details={
-            <ul className="grid gap-2">
-              <li>Uploaded to staging: complete</li>
-              <li>Archived on primary target: verified</li>
-              <li>Replica target: unavailable</li>
-              <li>Safe to delete from phone: no</li>
-            </ul>
-          }
-          nextAction="Reconnect the replica target or adjust policy after review."
-          safeNow="Originals remain safe on the verified primary archive. Cleanup stays blocked."
-          state="partial-success"
-          title="Replica target unavailable"
-        />
+        {hasReplicaWarning ? (
+          <TransitionState
+            description="At least one replica target is currently unavailable. The UI keeps archival safety conservative until replica policy is satisfied."
+            details={
+              <ul className="grid gap-2">
+                {snapshot.storageTargets
+                  .filter((target) => target.role === 'archive-replica')
+                  .map((target) => (
+                    <li key={target.id}>
+                      {target.name}: {target.healthState}
+                    </li>
+                  ))}
+              </ul>
+            }
+            nextAction="Reconnect the replica target or adjust policy after review."
+            safeNow="Cleanup should remain blocked unless verified placement policy is satisfied."
+            state="partial-success"
+            title="Replica target requires attention"
+          />
+        ) : hasStorageTargets ? (
+          <TransitionState
+            description="Storage targets are registered in the control plane. The next milestone is verifying real placements and surfacing cleanup eligibility from durable state."
+            nextAction="Register a device and begin ingest validation against the archive-primary target."
+            safeNow="No automatic deletion is enabled, and safety remains policy-driven."
+            state="success"
+            title="Control plane topology loaded"
+          />
+        ) : (
+          <TransitionState
+            description="No storage targets are configured yet, so the archive truth model cannot progress beyond bootstrap."
+            nextAction="Add an archive-primary target before enabling ingest."
+            safeNow="Nothing has been deleted, and no asset can be marked safe to remove."
+            state="blocking-error"
+            title="Archive primary target required"
+          />
+        )}
         <Card className="space-y-4">
           <div className="space-y-1">
             <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
@@ -102,16 +138,46 @@ export function DashboardScreen({
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <EmptyState
-          actionLabel="Connect desktop agent"
-          description="No active desktop agents are reporting yet. A local execution agent is required before Life-Loop can archive originals to user-controlled storage."
-          icon="▣"
-          secondary="The control plane tracks health and policy. The agent owns local file placement and verification."
-          title="No devices connected"
-        />
+        {!hasDevices ? (
+          <EmptyState
+            actionLabel="Connect desktop agent"
+            description="No active desktop agents are reporting yet. A local execution agent is required before Life-Loop can archive originals to user-controlled storage."
+            icon="▣"
+            secondary="The control plane tracks health and policy. The agent owns local file placement and verification."
+            title="No devices connected"
+          />
+        ) : (
+          <Card className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
+                Devices
+              </p>
+              <h2 className="text-xl font-semibold text-foreground">Recent device activity</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {snapshot.devices.map((device) => (
+                <StatusRow
+                  key={device.id}
+                  label={device.name}
+                  meta={`${device.platform} • ${device.lastSeenAt ?? 'no heartbeat yet'}`}
+                  tone={device.status === 'active' ? 'success' : 'warning'}
+                  value={device.status}
+                />
+              ))}
+            </div>
+          </Card>
+        )}
         <TransitionState
-          description="The archive queue exists and the state model is explicit, but work has not started yet in this environment."
-          nextAction="Start the API and desktop agent, then register the first library."
+          description={
+            snapshot.jobs.length > 0
+              ? 'Recent control-plane jobs are loaded from Postgres. The next step is to connect job state to real ingest, placement, and verification transitions.'
+              : 'The job model exists and the state vocabulary is explicit, but work has not started yet in this environment.'
+          }
+          nextAction={
+            snapshot.jobs.length > 0
+              ? 'Inspect the most recent job runs and wire user-facing progress groups to those explicit statuses.'
+              : 'Start the API and desktop agent, then register the first library.'
+          }
           progress={reducedMotion ? 100 : 68}
           safeNow="No cleanup is enabled and no originals are removed automatically."
           state="in-progress"
@@ -120,42 +186,64 @@ export function DashboardScreen({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="space-y-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
-              Storage topology
-            </p>
-            <h2 className="text-xl font-semibold text-foreground">Role-aware targets</h2>
-          </div>
-          <div className="divide-y divide-border">
-            {snapshot.storageTargets.map((target) => (
-              <StatusRow
-                key={target.id}
-                label={target.name}
-                meta={`${target.provider} • ${target.role} • ${
-                  target.writable ? 'writable' : 'read-only'
-                }`}
-                tone={target.healthy ? 'success' : 'warning'}
-                value={target.healthState}
-              />
-            ))}
-          </div>
-        </Card>
+        {hasStorageTargets ? (
+          <Card className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
+                Storage topology
+              </p>
+              <h2 className="text-xl font-semibold text-foreground">Role-aware targets</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {snapshot.storageTargets.map((target) => (
+                <StatusRow
+                  key={target.id}
+                  label={target.name}
+                  meta={`${target.provider} • ${target.role} • ${
+                    target.writable ? 'writable' : 'read-only'
+                  }`}
+                  tone={target.healthy ? 'success' : 'warning'}
+                  value={target.healthState}
+                />
+              ))}
+            </div>
+          </Card>
+        ) : (
+          <EmptyState
+            actionLabel="Add storage target"
+            description="Archive-primary, replica, preview, and transfer-cache roles stay explicit. No target is configured yet, so the system cannot treat any upload as safely archived."
+            icon="◌"
+            secondary="The VPS remains a control plane, not the universal archive for originals."
+            title="No storage targets configured"
+          />
+        )}
 
         <div className="grid gap-4">
           <TransitionState
-            description="Readiness checks must preserve clarity under failure and reduced motion. This component family covers loading, empty, recoverable, blocking, and dependency-loss states."
-            nextAction="Reuse the same state surfaces for onboarding, storage health, ingest, cleanup, and restore."
+            description={
+              snapshot.libraries.length > 0
+                ? 'Library records are loading from the API. This is now a real control-plane summary rather than a static page-level bootstrap object.'
+                : 'The control plane is responding, but no libraries have been registered yet.'
+            }
+            nextAction={
+              snapshot.libraries.length > 0
+                ? 'Add onboarding and registration flows that create these records intentionally.'
+                : 'Register the first library and pair it with an archive-primary target.'
+            }
             safeNow="State language stays stable across all trust-critical screens."
-            state="empty"
-            title="Transition-state system scaffolded"
+            state={snapshot.libraries.length > 0 ? 'success' : 'empty'}
+            title={
+              snapshot.libraries.length > 0
+                ? 'Live control-plane summary'
+                : 'No libraries registered'
+            }
           />
           <TransitionState
-            description="Blocking errors remain explicit and calm. The UI names what is blocked, what remains safe, and what the operator can do now."
-            nextAction="Add a writable archive-primary target before enabling ingest."
+            description="Blocking and dependency-loss states remain explicit and calm. The UI names what is blocked, what remains safe, and what the operator can do now."
+            nextAction="Keep wiring these surfaces to real ingest, verification, restore, and cleanup jobs."
             safeNow="Nothing has been deleted, and no asset is marked cleanup-eligible."
-            state="blocking-error"
-            title="Archive primary target required"
+            state={usingFallback ? 'disconnected-dependency' : 'completed-with-warnings'}
+            title={usingFallback ? 'API dependency unavailable' : 'Transition coverage in place'}
           />
         </div>
       </section>
