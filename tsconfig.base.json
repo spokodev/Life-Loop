@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@life-loop/config": ["packages/config/src/index.ts"],
+      "@life-loop/config/*": ["packages/config/src/*"],
+      "@life-loop/design-tokens": ["packages/design-tokens/src/index.ts"],
+      "@life-loop/shared-types/*": ["packages/shared-types/src/*"],
+      "@life-loop/shared-types": ["packages/shared-types/src/index.ts"],
+      "@life-loop/ui": ["packages/ui/src/index.ts"],
+      "@life-loop/ui/*": ["packages/ui/src/*"],
+      "@life-loop/design-tokens/*": ["packages/design-tokens/src/*"]
+    }
+  }
+}

@@ -1,0 +1,56 @@
+:root {
+  --font-sans: "Avenir Next", "Manrope", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+
+  --color-surface: 36 33% 98%;
+  --color-surface-muted: 40 25% 95%;
+  --color-surface-raised: 0 0% 100%;
+  --color-surface-critical: 16 100% 98%;
+  --color-text-primary: 202 30% 14%;
+  --color-text-secondary: 203 20% 33%;
+  --color-text-muted: 202 10% 45%;
+  --color-border: 201 18% 84%;
+  --color-border-strong: 198 22% 68%;
+  --color-primary: 184 68% 34%;
+  --color-primary-foreground: 0 0% 100%;
+  --color-success: 150 55% 34%;
+  --color-warning: 33 93% 46%;
+  --color-danger: 10 78% 54%;
+  --color-info: 199 85% 42%;
+  --color-focus-ring: 184 68% 34%;
+  --color-status-new: 204 94% 55%;
+  --color-status-ingesting: 193 75% 46%;
+  --color-status-staged: 36 95% 52%;
+  --color-status-archived: 184 68% 34%;
+  --color-status-verified: 150 55% 34%;
+  --color-status-replicated: 168 70% 30%;
+  --color-status-replica-stale: 31 92% 48%;
+  --color-status-manual-review: 12 82% 58%;
+  --color-status-safe-cleanup: 142 61% 34%;
+  --color-status-blocked: 4 72% 52%;
+  --color-status-recovering: 220 77% 54%;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  --shadow-soft: 0 18px 45px -28px rgba(15, 23, 42, 0.18);
+  --shadow-elevated: 0 24px 60px -26px rgba(15, 23, 42, 0.22);
+
+  --motion-duration-fast: 140ms;
+  --motion-duration-normal: 220ms;
+  --motion-duration-slow: 320ms;
+}
+
+.dark {
+  --color-surface: 206 32% 10%;
+  --color-surface-muted: 207 28% 14%;
+  --color-surface-raised: 208 31% 16%;
+  --color-surface-critical: 10 40% 16%;
+  --color-text-primary: 40 25% 96%;
+  --color-text-secondary: 40 16% 82%;
+  --color-text-muted: 198 12% 65%;
+  --color-border: 207 18% 26%;
+  --color-border-strong: 203 16% 38%;
+}

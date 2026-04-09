@@ -1,0 +1,75 @@
+services:
+  api:
+    image: ${LIFE_LOOP_API_IMAGE:-ghcr.io/example/life-loop-api:latest}
+    container_name: life-loop-api
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+    networks:
+      - internal
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.life-loop-api.rule=Host(`${LIFE_LOOP_API_HOST:-api.life-loop.example}`)
+      - traefik.http.routers.life-loop-api.entrypoints=websecure
+      - traefik.http.services.life-loop-api.loadbalancer.server.port=4000
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  web:
+    image: ${LIFE_LOOP_WEB_IMAGE:-ghcr.io/example/life-loop-web:latest}
+    container_name: life-loop-web
+    networks:
+      - internal
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.life-loop-web.rule=Host(`${LIFE_LOOP_WEB_HOST:-life-loop.example}`)
+      - traefik.http.routers.life-loop-web.entrypoints=websecure
+      - traefik.http.services.life-loop-web.loadbalancer.server.port=3000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: life-loop-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lifeloop}
+      POSTGRES_USER: ${POSTGRES_USER:-lifeloop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - /opt/life-loop/data/postgres:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-lifeloop} -d ${POSTGRES_DB:-lifeloop}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  internal:
+  traefik:
+    external: true

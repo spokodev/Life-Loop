@@ -1,0 +1,11 @@
+{
+  "name": "@life-loop/desktop-agent",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "node ../../scripts/run-go-task.mjs build",
+    "lint": "node ../../scripts/run-go-task.mjs fmt",
+    "test": "node ../../scripts/run-go-task.mjs test",
+    "typecheck": "node ../../scripts/run-go-task.mjs typecheck"
+  }
+}

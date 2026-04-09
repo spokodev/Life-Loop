@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lifeloop}
+      POSTGRES_USER: ${POSTGRES_USER:-lifeloop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lifeloop}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - life-loop-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-lifeloop} -d ${POSTGRES_DB:-lifeloop}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  life-loop-postgres:
