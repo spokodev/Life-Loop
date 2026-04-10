@@ -13,6 +13,7 @@ import type {
 import type { PoolClient } from 'pg'
 
 import { insertAuditEvent } from './audit'
+import { assertLibraryOwnedByClerkUser } from './authorization'
 import { getDatabasePool } from './client'
 import { authenticateDeviceCredential } from './device-auth'
 
@@ -221,6 +222,10 @@ export async function createDeviceRecord(input: CreateDeviceInput, correlationId
   try {
     await client.query('begin')
 
+    if (input.requestedBy?.clerkUserId) {
+      await assertLibraryOwnedByClerkUser(client, input.libraryId, input.requestedBy.clerkUserId)
+    }
+
     const deviceResult = await client.query<Device>(
       `
         insert into devices (library_id, name, platform, status)
@@ -295,6 +300,10 @@ export async function createStorageTargetRecord(
 
   try {
     await client.query('begin')
+
+    if (input.requestedBy?.clerkUserId) {
+      await assertLibraryOwnedByClerkUser(client, input.libraryId, input.requestedBy.clerkUserId)
+    }
 
     const storageTargetResult = await client.query<StorageTarget>(
       `

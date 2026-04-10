@@ -1,10 +1,13 @@
-import { idempotencyKeyHeader } from '@life-loop/config'
+import { idempotencyKeyHeader, parseApiEnv } from '@life-loop/config'
 import { jobKinds, jobStatuses } from '@life-loop/shared-types'
 import { type Context, Hono } from 'hono'
 import { type ZodTypeAny, z } from 'zod'
 
 import { createJobRecord, listJobs, transitionJobRecord } from '../db/jobs'
 import { problemJson } from '../lib/problem'
+import { resolveUserActor, UserAuthError } from '../lib/user-auth'
+
+const env = parseApiEnv(process.env)
 
 type JobsContext = Context<{
   Variables: {
@@ -88,8 +91,17 @@ jobsRoutes.post('/jobs', async (context) => {
   }
 
   try {
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+
     const response = await createJobRecord(
-      parsedBody.data,
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
       context.get('correlationId'),
       context.req.header(idempotencyKeyHeader),
     )
@@ -119,7 +131,19 @@ jobsRoutes.post('/jobs/:jobId/transitions', async (context) => {
   }
 
   try {
-    const response = await transitionJobRecord(jobId, parsedBody.data, context.get('correlationId'))
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+    const response = await transitionJobRecord(
+      jobId,
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
+      context.get('correlationId'),
+    )
     return context.json(response)
   } catch (error) {
     return mapJobsError(context, error)
@@ -164,10 +188,37 @@ async function parseBody<TSchema extends ZodTypeAny>(context: JobsContext, schem
 }
 
 function mapJobsError(context: JobsContext, error: unknown) {
+  if (error instanceof UserAuthError) {
+    return problemJson(context, {
+      title: error.title,
+      status: error.status,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
   if (error instanceof Error && error.message === 'Job not found.') {
     return problemJson(context, {
       title: 'Job not found',
       status: 404,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  if (error instanceof Error && error.message.includes('Authenticated user does not own')) {
+    return problemJson(context, {
+      title: 'Access denied',
+      status: 403,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  if (error instanceof Error && error.message.includes('Idempotency key belongs')) {
+    return problemJson(context, {
+      title: 'Idempotency key conflict',
+      status: 409,
       detail: error.message,
       correlationId: context.get('correlationId'),
     })

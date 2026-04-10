@@ -13,6 +13,7 @@ import {
   validateJobTransition,
 } from '../lib/job-rules'
 import { insertAuditEvent } from './audit'
+import { assertLibraryOwnedByClerkUser } from './authorization'
 import { getDatabasePool } from './client'
 
 type JobFilters = {
@@ -91,10 +92,18 @@ export async function createJobRecord(
   try {
     await client.query('begin')
 
+    if (input.requestedBy?.clerkUserId) {
+      await assertLibraryOwnedByClerkUser(client, input.libraryId, input.requestedBy.clerkUserId)
+    }
+
     if (idempotencyKey) {
       const existingJob = await findJobByIdempotencyKey(client, idempotencyKey)
 
       if (existingJob) {
+        if (existingJob.libraryId !== input.libraryId) {
+          throw new Error('Idempotency key belongs to a different job scope.')
+        }
+
         const existingRestoreDrill = existingJob.restoreDrillId
           ? await findRestoreDrillById(client, existingJob.restoreDrillId)
           : undefined
@@ -240,6 +249,18 @@ export async function transitionJobRecord(
 
     if (!currentJob) {
       throw new Error('Job not found.')
+    }
+
+    if (input.requestedBy?.clerkUserId) {
+      if (!currentJob.libraryId) {
+        throw new Error('Job is missing a library scope.')
+      }
+
+      await assertLibraryOwnedByClerkUser(
+        client,
+        currentJob.libraryId,
+        input.requestedBy.clerkUserId,
+      )
     }
 
     const validationMessage = validateJobTransition(stripRestoreDrillId(currentJob), input)

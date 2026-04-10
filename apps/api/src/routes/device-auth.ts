@@ -1,3 +1,4 @@
+import { parseApiEnv } from '@life-loop/config'
 import { type Context, Hono } from 'hono'
 import { type ZodTypeAny, z } from 'zod'
 
@@ -9,6 +10,9 @@ import {
 } from '../db/device-auth'
 import { parseBearerToken } from '../lib/bearer-token'
 import { problemJson } from '../lib/problem'
+import { resolveUserActor, UserAuthError } from '../lib/user-auth'
+
+const env = parseApiEnv(process.env)
 
 const emailOwnerSchema = z.object({
   email: z.string().email(),
@@ -121,9 +125,18 @@ deviceAuthRoutes.post('/devices/:deviceId/revoke', async (context) => {
   }
 
   try {
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+
     const device = await revokeDevice(
       parsedParams.data.deviceId,
-      parsedBody.data,
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
       context.get('correlationId'),
     )
 
@@ -154,9 +167,18 @@ deviceAuthRoutes.post('/devices/:deviceId/rotate-credential', async (context) =>
   }
 
   try {
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+
     const response = await rotateDeviceCredential(
       parsedParams.data.deviceId,
-      parsedBody.data,
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
       context.get('correlationId'),
     )
 
@@ -212,6 +234,15 @@ function mapDeviceAuthError(context: DeviceAuthContext, error: unknown) {
     throw error
   }
 
+  if (error instanceof UserAuthError) {
+    return problemJson(context, {
+      title: error.title,
+      status: error.status,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
   if (
     error.message.includes('Enrollment token was not found') ||
     error.message.includes('Device credential was not found') ||
@@ -241,7 +272,8 @@ function mapDeviceAuthError(context: DeviceAuthContext, error: unknown) {
   if (
     error.message.includes('Device has been revoked') ||
     error.message.includes('Device is paused') ||
-    error.message.includes('Device credential is not active')
+    error.message.includes('Device credential is not active') ||
+    error.message.includes('Authenticated user does not own')
   ) {
     return problemJson(context, {
       title: 'Access denied',

@@ -41,7 +41,7 @@ For the full local runbook, see `docs/23-local-development-runbook.md`.
    - API ready: [http://localhost:4000/health/ready](http://localhost:4000/health/ready)
 7. Optionally run `pnpm smoke:health` while web and API are running to check those health endpoints from the command line.
 
-Production web builds require Clerk keys. CI uses explicitly fake build-time Clerk values only to exercise the static build path without external secrets; real deployments must provide real Clerk configuration.
+Production web builds require Clerk keys. API user auth is enabled only when `CLERK_ISSUER_URL` is configured, and then `CLERK_SECRET_KEY` is required so API writes can verify Clerk sessions and load canonical owner identity. CI uses explicitly fake build-time Clerk values only to exercise the static build path without external secrets; real deployments must provide real Clerk configuration.
 
 ## Quality gates
 - `pnpm docs:check`

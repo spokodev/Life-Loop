@@ -1,5 +1,6 @@
 'use client'
 
+import { useAuth, useUser } from '@clerk/nextjs'
 import type {
   CreateDeviceResponse,
   DashboardSnapshot,
@@ -23,7 +24,7 @@ import {
 } from '@life-loop/ui'
 import { useRouter } from 'next/navigation'
 import type { FormEvent, ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const navItems = [
   { label: 'Overview', hint: 'Return to archive health and current state.' },
@@ -39,6 +40,14 @@ type StepState =
   | 'success'
   | 'recoverable-error'
   | 'blocking-error'
+
+type AuthenticatedOwnerSession = {
+  displayName?: string
+  email?: string
+  getToken: () => Promise<string | null>
+  isLoaded: boolean
+  isSignedIn: boolean
+}
 
 const topologyCopy: Record<
   StorageTopology,
@@ -73,6 +82,66 @@ export function OnboardingFlow({
   authEnabled: boolean
   snapshot: DashboardSnapshot
 }) {
+  if (authEnabled) {
+    return (
+      <AuthenticatedOnboardingFlow
+        apiBaseUrl={apiBaseUrl}
+        authEnabled={authEnabled}
+        snapshot={snapshot}
+      />
+    )
+  }
+
+  return (
+    <OnboardingFlowContent apiBaseUrl={apiBaseUrl} authEnabled={authEnabled} snapshot={snapshot} />
+  )
+}
+
+function AuthenticatedOnboardingFlow({
+  apiBaseUrl,
+  authEnabled,
+  snapshot,
+}: {
+  apiBaseUrl: string
+  authEnabled: boolean
+  snapshot: DashboardSnapshot
+}) {
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const { user } = useUser()
+
+  return (
+    <OnboardingFlowContent
+      apiBaseUrl={apiBaseUrl}
+      authEnabled={authEnabled}
+      authSession={{
+        getToken,
+        isLoaded,
+        isSignedIn: Boolean(isSignedIn),
+        ...(user?.fullName
+          ? { displayName: user.fullName }
+          : user?.username
+            ? { displayName: user.username }
+            : {}),
+        ...(user?.primaryEmailAddress?.emailAddress
+          ? { email: user.primaryEmailAddress.emailAddress }
+          : {}),
+      }}
+      snapshot={snapshot}
+    />
+  )
+}
+
+function OnboardingFlowContent({
+  apiBaseUrl,
+  authEnabled,
+  authSession,
+  snapshot,
+}: {
+  apiBaseUrl: string
+  authEnabled: boolean
+  authSession?: AuthenticatedOwnerSession
+  snapshot: DashboardSnapshot
+}) {
   const router = useRouter()
   const [topology, setTopology] = useState<StorageTopology>('local-first')
   const [libraryState, setLibraryState] = useState<StepState>('idle')
@@ -89,7 +158,6 @@ export function OnboardingFlow({
 
   const [ownerEmail, setOwnerEmail] = useState('')
   const [ownerDisplayName, setOwnerDisplayName] = useState('')
-  const [ownerClerkUserId, setOwnerClerkUserId] = useState('')
   const [libraryName, setLibraryName] = useState('')
   const [librarySlug, setLibrarySlug] = useState('')
   const [libraryDescription, setLibraryDescription] = useState('')
@@ -102,35 +170,85 @@ export function OnboardingFlow({
   const [storageRole, setStorageRole] = useState<StorageTarget['role']>('archive-primary')
   const [storageWritable, setStorageWritable] = useState(true)
 
+  useEffect(() => {
+    if (!authEnabled) {
+      return
+    }
+
+    if (authSession?.email) {
+      setOwnerEmail(authSession.email)
+    }
+
+    if (authSession?.displayName) {
+      setOwnerDisplayName(authSession.displayName)
+    }
+  }, [authEnabled, authSession?.displayName, authSession?.email])
+
+  async function buildJsonHeaders() {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+
+    if (!authEnabled) {
+      return headers
+    }
+
+    if (!authSession?.isLoaded) {
+      throw new Error('Clerk session is still loading. Try again in a moment.')
+    }
+
+    if (!authSession.isSignedIn) {
+      throw new Error('Sign in with Clerk before creating user-owned resources.')
+    }
+
+    const token = await authSession.getToken()
+
+    if (!token) {
+      throw new Error('Clerk did not return a session token for this request.')
+    }
+
+    headers.authorization = `Bearer ${token}`
+    return headers
+  }
+
   async function handleCreateLibrary(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLibraryError(null)
 
-    if (!ownerEmail || !libraryName || !librarySlug) {
+    if (!libraryName || !librarySlug || (!authEnabled && !ownerEmail)) {
       setLibraryState('blocking-error')
-      setLibraryError('Owner email, library name, and library slug are required.')
-      return
-    }
-
-    if (authEnabled && !ownerClerkUserId) {
-      setLibraryState('blocking-error')
-      setLibraryError('Clerk user id is required while auth integration is enabled.')
+      setLibraryError(
+        authEnabled
+          ? 'Library name and library slug are required.'
+          : 'Owner email, library name, and library slug are required.',
+      )
       return
     }
 
     setLibraryState('in-progress')
 
+    let headers: Record<string, string>
+
+    try {
+      headers = await buildJsonHeaders()
+    } catch (error) {
+      setLibraryState('blocking-error')
+      setLibraryError(error instanceof Error ? error.message : 'Clerk authentication is required.')
+      return
+    }
+
     const response = await fetch(`${apiBaseUrl}/v1/libraries`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
-        owner: {
-          email: ownerEmail,
-          displayName: ownerDisplayName || undefined,
-          clerkUserId: ownerClerkUserId || undefined,
-        },
+        ...(!authEnabled
+          ? {
+              owner: {
+                email: ownerEmail,
+                displayName: ownerDisplayName || undefined,
+              },
+            }
+          : {}),
         library: {
           name: libraryName,
           slug: librarySlug,
@@ -173,21 +291,32 @@ export function OnboardingFlow({
 
     setDeviceState('in-progress')
 
+    let headers: Record<string, string>
+
+    try {
+      headers = await buildJsonHeaders()
+    } catch (error) {
+      setDeviceState('blocking-error')
+      setDeviceError(error instanceof Error ? error.message : 'Clerk authentication is required.')
+      return
+    }
+
     const response = await fetch(`${apiBaseUrl}/v1/devices`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         libraryId: createdLibrary.id,
         device: {
           name: deviceName,
           platform: devicePlatform,
         },
-        requestedBy: {
-          email: ownerEmail || undefined,
-          clerkUserId: ownerClerkUserId || undefined,
-        },
+        ...(!authEnabled
+          ? {
+              requestedBy: {
+                email: ownerEmail || undefined,
+              },
+            }
+          : {}),
       }),
     })
 
@@ -224,11 +353,19 @@ export function OnboardingFlow({
 
     setStorageState('in-progress')
 
+    let headers: Record<string, string>
+
+    try {
+      headers = await buildJsonHeaders()
+    } catch (error) {
+      setStorageState('blocking-error')
+      setStorageError(error instanceof Error ? error.message : 'Clerk authentication is required.')
+      return
+    }
+
     const response = await fetch(`${apiBaseUrl}/v1/storage-targets`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         libraryId: createdLibrary.id,
         storageTarget: {
@@ -237,10 +374,13 @@ export function OnboardingFlow({
           role: storageRole,
           writable: storageWritable,
         },
-        requestedBy: {
-          email: ownerEmail || undefined,
-          clerkUserId: ownerClerkUserId || undefined,
-        },
+        ...(!authEnabled
+          ? {
+              requestedBy: {
+                email: ownerEmail || undefined,
+              },
+            }
+          : {}),
       }),
     })
 
@@ -298,7 +438,13 @@ export function OnboardingFlow({
           title="Bootstrap owner mode"
           tone="warning"
         />
-      ) : null}
+      ) : (
+        <Banner
+          description="Owner identity comes from the authenticated Clerk session. The API ignores body-provided owner ids while auth is enabled."
+          title="Clerk owner context"
+          tone="info"
+        />
+      )}
 
       <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="grid gap-4">
@@ -315,16 +461,18 @@ export function OnboardingFlow({
               <div className="grid gap-2 md:grid-cols-2">
                 <Field label="Owner email">
                   <Input
+                    disabled={authEnabled}
                     onChange={(event) => setOwnerEmail(event.target.value)}
-                    placeholder="owner@example.com"
+                    placeholder={authEnabled ? 'Loaded from Clerk session' : 'owner@example.com'}
                     type="email"
                     value={ownerEmail}
                   />
                 </Field>
                 <Field label="Owner display name">
                   <Input
+                    disabled={authEnabled}
                     onChange={(event) => setOwnerDisplayName(event.target.value)}
-                    placeholder="Archive owner"
+                    placeholder={authEnabled ? 'Loaded from Clerk profile' : 'Archive owner'}
                     value={ownerDisplayName}
                   />
                 </Field>
@@ -345,15 +493,6 @@ export function OnboardingFlow({
                   />
                 </Field>
               </div>
-              {authEnabled ? (
-                <Field label="Clerk user id">
-                  <Input
-                    onChange={(event) => setOwnerClerkUserId(event.target.value)}
-                    placeholder="user_..."
-                    value={ownerClerkUserId}
-                  />
-                </Field>
-              ) : null}
               <Field label="What setup model fits best right now?">
                 <div className="grid gap-3 md:grid-cols-3">
                   {storageTopologies.map((option) => (

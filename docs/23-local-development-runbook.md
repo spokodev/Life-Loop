@@ -59,6 +59,19 @@ pnpm build
 
 Real production deployments must use real Clerk configuration.
 
+## Clerk Auth Modes
+Local bootstrap mode is active when `CLERK_ISSUER_URL` is empty for the API and Clerk keys are empty for the web app. In that mode the onboarding form accepts explicit owner identity fields so a developer can create local records without external secrets.
+
+Authenticated mode requires:
+
+```sh
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<real-publishable-key>
+CLERK_SECRET_KEY=<real-secret-key>
+CLERK_ISSUER_URL=<real-clerk-issuer-url>
+```
+
+When authenticated mode is enabled, web routes are protected by Clerk middleware, onboarding sends a Clerk session token to the API, and API write routes derive `owner/requestedBy` from Clerk instead of trusting body-provided user ids. Device agent calls still use device-scoped credentials rather than Clerk sessions.
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 

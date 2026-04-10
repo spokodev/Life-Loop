@@ -15,6 +15,7 @@ import {
   parseDeviceCredential,
 } from '../lib/device-credentials'
 import { insertAuditEvent } from './audit'
+import { assertLibraryOwnedByClerkUser } from './authorization'
 import { getDatabasePool } from './client'
 
 type DeviceRow = Device
@@ -235,6 +236,14 @@ export async function revokeDevice(
       throw new Error('Device not found.')
     }
 
+    if (input.requestedBy?.clerkUserId) {
+      await assertLibraryOwnedByClerkUser(
+        client,
+        currentDevice.libraryId,
+        input.requestedBy.clerkUserId,
+      )
+    }
+
     const deviceResult = await client.query<DeviceRow>(
       `
         update devices d
@@ -309,6 +318,10 @@ export async function rotateDeviceCredential(
 
     if (device.status === 'revoked') {
       throw new Error('Device has been revoked.')
+    }
+
+    if (input.requestedBy?.clerkUserId) {
+      await assertLibraryOwnedByClerkUser(client, device.libraryId, input.requestedBy.clerkUserId)
     }
 
     await client.query(

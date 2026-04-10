@@ -14,6 +14,7 @@ import {
 } from '../db/registry'
 import { parseBearerToken } from '../lib/bearer-token'
 import { problemJson } from '../lib/problem'
+import { resolveUserActor, UserAuthError } from '../lib/user-auth'
 
 const env = parseApiEnv(process.env)
 
@@ -24,7 +25,7 @@ const emailOwnerSchema = z.object({
 })
 
 const createLibrarySchema = z.object({
-  owner: emailOwnerSchema,
+  owner: emailOwnerSchema.optional(),
   library: z.object({
     name: z.string().trim().min(1).max(120),
     slug: z
@@ -87,8 +88,26 @@ registryRoutes.post('/libraries', async (context) => {
   }
 
   try {
+    const owner = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.owner,
+      env,
+    })
+
+    if (!owner) {
+      return problemJson(context, {
+        title: 'Owner identity required',
+        status: 422,
+        detail: 'Bootstrap library creation must include an explicit owner identity.',
+        correlationId: context.get('correlationId'),
+      })
+    }
+
     const library = await createLibraryRecord(
-      parsedBody.data,
+      {
+        ...parsedBody.data,
+        owner,
+      },
       context.get('correlationId'),
       env.authEnabled,
     )
@@ -125,7 +144,19 @@ registryRoutes.post('/devices', async (context) => {
   }
 
   try {
-    const enrollment = await createDeviceRecord(parsedBody.data, context.get('correlationId'))
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+
+    const enrollment = await createDeviceRecord(
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
+      context.get('correlationId'),
+    )
 
     return context.json(enrollment, 201)
   } catch (error) {
@@ -168,8 +199,17 @@ registryRoutes.post('/storage-targets', async (context) => {
   }
 
   try {
+    const requestedBy = await resolveUserActor({
+      authorizationHeader: context.req.header('authorization'),
+      bootstrapActor: parsedBody.data.requestedBy,
+      env,
+    })
+
     const storageTarget = await createStorageTargetRecord(
-      parsedBody.data,
+      {
+        ...parsedBody.data,
+        ...(requestedBy ? { requestedBy } : {}),
+      },
       context.get('correlationId'),
     )
 
@@ -221,6 +261,15 @@ function mapRegistryError(context: RegistryContext, error: unknown) {
     throw error
   }
 
+  if (error instanceof UserAuthError) {
+    return problemJson(context, {
+      title: error.title,
+      status: error.status,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
   if (
     error.message.includes('Device credential was not found') ||
     error.message.includes('Device credential secret is invalid') ||
@@ -238,7 +287,8 @@ function mapRegistryError(context: RegistryContext, error: unknown) {
     error.message.includes('Device has been revoked') ||
     error.message.includes('Device is paused') ||
     error.message.includes('Device credential is not active') ||
-    error.message.includes('Authenticated device does not belong')
+    error.message.includes('Authenticated device does not belong') ||
+    error.message.includes('Authenticated user does not own')
   ) {
     return problemJson(context, {
       title: 'Access denied',

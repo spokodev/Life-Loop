@@ -32,6 +32,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@clerk/backend':
+        specifier: ^2.33.1
+        version: 2.33.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.13(hono@4.12.12)

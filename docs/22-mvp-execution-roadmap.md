@@ -31,10 +31,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 2. Auth and Tenant Safety
 - Add an ADR for Clerk user auth and tenant scoping before route enforcement. **Done:** ADR-016 defines user auth, bootstrap mode, and device-auth separation.
-- Finish Clerk integration for web route protection and authenticated owner context.
-- Enforce Clerk identity on user-owned API write paths when auth is enabled.
-- Preserve documented bootstrap mode for local development.
-- Test auth-disabled bootstrap behavior, auth-enabled missing Clerk identity, and device credential scoping.
+- Finish Clerk integration for web route protection and authenticated owner context. **Done:** configured Clerk middleware when keys are present and onboarding now sends authenticated Clerk session tokens instead of manual Clerk user ids.
+- Enforce Clerk identity on user-owned API write paths when auth is enabled. **Done:** API write routes derive `owner/requestedBy` from verified Clerk sessions and assert library ownership before device, storage-target, device-admin, and job mutations.
+- Preserve documented bootstrap mode for local development. **Done:** API auth remains disabled unless `CLERK_ISSUER_URL` is set; bootstrap mode still accepts explicit owner/requestedBy fields.
+- Test auth-disabled bootstrap behavior, auth-enabled missing Clerk identity, and device credential scoping. **Done:** `user-auth` unit coverage exercises bootstrap, missing Clerk bearer token, derived Clerk actor, issuer mismatch, and device credential rejection.
 
 ### 3. Billing
 - Add Stripe config validation for Checkout, Billing, Customer Portal, and webhook signature verification.
