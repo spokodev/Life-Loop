@@ -11,6 +11,7 @@ Repository documentation is authoritative. Start with:
 - `docs/19-implementation-readiness-check.md`
 - `docs/20-final-audit-and-gap-closure.md`
 - `docs/22-mvp-execution-roadmap.md`
+- `docs/23-local-development-runbook.md`
 - `docs/adr/`
 - `docs/design/`
 - `docs/qa/`
@@ -27,6 +28,8 @@ If implementation conflicts with those documents, stop and update ADRs instead o
 - `packages/config`: typed env validation, logging helpers, and Tailwind preset
 
 ## Local setup
+For the full local runbook, see `docs/23-local-development-runbook.md`.
+
 1. Copy `.env.example` values into your shell or app-specific env files as needed.
 2. Start local infrastructure with `pnpm infra:up`.
 3. Install dependencies with `pnpm install`.

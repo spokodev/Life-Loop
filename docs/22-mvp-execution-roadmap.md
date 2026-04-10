@@ -26,7 +26,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Tighten CI to use the lockfile strictly. **Done:** CI now uses `pnpm install --frozen-lockfile`.
 - Add build coverage where practical without making external secrets mandatory. **Done:** CI runs `pnpm build` with explicit fake Clerk build-time values only.
 - Keep generated/cache artifacts untracked and ignored.
-- Improve README/runbooks so a fresh developer can install dependencies, start local infra, migrate the database, run web/API/agent, and validate health endpoints. **Partial:** README now documents health smoke validation.
+- Improve README/runbooks so a fresh developer can install dependencies, start local infra, migrate the database, run web/API/agent, and validate health endpoints. **Done:** `docs/23-local-development-runbook.md` covers the local flow.
 - Add smoke-test scripts only when they run locally without external secrets. **Done:** `pnpm smoke:health` checks web/API health endpoints when services are running.
 
 ### 2. Auth and Tenant Safety
