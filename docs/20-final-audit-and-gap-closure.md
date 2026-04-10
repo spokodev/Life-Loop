@@ -198,6 +198,7 @@ Covered:
 - disk-centric execution model
 - agent owns local archive mechanics
 - local disk provider now has atomic write + checksum verify primitives
+- control-plane device surfaces now expose revoke and credential-repair actions explicitly
 
 Still watch:
 - mount detection behavior
