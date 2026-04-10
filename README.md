@@ -10,6 +10,7 @@ Repository documentation is authoritative. Start with:
 - `docs/18-product-backlog-v1.md`
 - `docs/19-implementation-readiness-check.md`
 - `docs/20-final-audit-and-gap-closure.md`
+- `docs/22-mvp-execution-roadmap.md`
 - `docs/adr/`
 - `docs/design/`
 - `docs/qa/`
