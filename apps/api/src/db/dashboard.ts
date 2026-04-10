@@ -62,9 +62,13 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
         `
           select
             id::text,
+            library_id::text as "libraryId",
+            asset_id::text as "assetId",
+            device_id::text as "deviceId",
             kind,
             status,
             correlation_id::text as "correlationId",
+            attempt_count as "attemptCount",
             to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
             to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt",
             blocking_reason as "blockingReason"
@@ -79,8 +83,11 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
             id::text,
             library_id::text as "libraryId",
             status,
+            sample_size as "sampleSize",
             to_char(started_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "startedAt",
             to_char(completed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "completedAt"
+            ,
+            notes
           from restore_drills
           order by created_at desc
           limit 12

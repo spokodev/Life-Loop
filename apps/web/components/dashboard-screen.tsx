@@ -18,6 +18,7 @@ const navItems = [
   { label: 'Libraries', hint: 'Archive truth and lifecycle status.' },
   { label: 'Devices', hint: 'Desktop agents and ingest endpoints.' },
   { label: 'Storage', hint: 'Primary, replica, preview, and transfer roles.' },
+  { label: 'Jobs', hint: 'Explicit orchestration state and operator review.' },
   { label: 'Cleanup', hint: 'Safe review before any removal action.' },
   { label: 'Billing', hint: 'Stripe-hosted subscription surfaces.' },
 ]
@@ -50,6 +51,9 @@ export function DashboardScreen({
             <Button onClick={() => router.push('/onboarding')}>Begin onboarding</Button>
           ) : (
             <>
+              <Button onClick={() => router.push('/jobs')} variant="secondary">
+                Review job queue
+              </Button>
               <Button onClick={() => router.push('/onboarding')}>Enroll another device</Button>
               <Button onClick={() => router.push('/onboarding')} variant="secondary">
                 Add storage target
@@ -186,7 +190,7 @@ export function DashboardScreen({
           }
           nextAction={
             snapshot.jobs.length > 0
-              ? 'Inspect the most recent job runs and wire user-facing progress groups to those explicit statuses.'
+              ? 'Inspect the job queue and keep explicit status transitions visible to operators.'
               : 'Start the API and desktop agent, then register the first library.'
           }
           progress={reducedMotion ? 100 : 68}
@@ -238,7 +242,7 @@ export function DashboardScreen({
             }
             nextAction={
               snapshot.libraries.length > 0
-                ? 'Add onboarding and registration flows that create these records intentionally.'
+                ? 'Use onboarding for registry setup and jobs for explicit orchestration state.'
                 : 'Register the first library and pair it with an archive-primary target.'
             }
             safeNow="State language stays stable across all trust-critical screens."

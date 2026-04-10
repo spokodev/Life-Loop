@@ -5,6 +5,7 @@ import { cors } from 'hono/cors'
 import { correlationIdHeader, createCorrelationId } from './lib/correlation-id'
 import { problemJson } from './lib/problem'
 import { healthRoutes } from './routes/health'
+import { jobsRoutes } from './routes/jobs'
 import { registryRoutes } from './routes/registry'
 import { systemRoutes } from './routes/system'
 
@@ -50,6 +51,7 @@ app.get('/', (context) =>
 app.route('/health', healthRoutes)
 app.route('/v1', systemRoutes)
 app.route('/v1', registryRoutes)
+app.route('/v1', jobsRoutes)
 
 app.notFound((context) =>
   problemJson(context, {

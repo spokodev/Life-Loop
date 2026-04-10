@@ -1,4 +1,5 @@
 export const correlationIdHeader = 'x-correlation-id'
+export const idempotencyKeyHeader = 'idempotency-key'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 

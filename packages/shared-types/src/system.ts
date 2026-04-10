@@ -64,9 +64,13 @@ export interface Placement {
 
 export interface JobRun {
   id: string
+  libraryId?: string
+  assetId?: string
+  deviceId?: string
   kind: JobKind
   status: JobStatus
   correlationId: string
+  attemptCount: number
   createdAt: string
   updatedAt: string
   blockingReason?: string
@@ -76,8 +80,10 @@ export interface RestoreDrill {
   id: string
   libraryId: string
   status: 'scheduled' | 'running' | 'passed' | 'failed'
+  sampleSize: number
   startedAt?: string
   completedAt?: string
+  notes?: string
 }
 
 export interface AuditEvent {
@@ -152,5 +158,33 @@ export interface CreateStorageTargetInput {
     role: StorageRole
     writable: boolean
   }
+  requestedBy?: OwnerIdentityInput
+}
+
+export interface CreateJobInput {
+  libraryId: string
+  deviceId?: string
+  assetId?: string
+  kind: JobKind
+  metadata?: {
+    scopeSummary?: string
+    notes?: string
+  }
+  restoreDrill?: {
+    sampleSize?: number
+    notes?: string
+  }
+  requestedBy?: OwnerIdentityInput
+}
+
+export interface CreateJobResponse {
+  job: JobRun
+  replayed: boolean
+  restoreDrill?: RestoreDrill
+}
+
+export interface TransitionJobInput {
+  status: JobStatus
+  reason?: string
   requestedBy?: OwnerIdentityInput
 }

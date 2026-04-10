@@ -12,6 +12,7 @@ import type {
 } from '@life-loop/shared-types'
 import type { PoolClient } from 'pg'
 
+import { insertAuditEvent } from './audit'
 import { getDatabasePool } from './client'
 
 const enrollmentTokenTtlMinutes = 15
@@ -378,31 +379,4 @@ async function upsertOwner(
   }
 
   return insertedUser.id
-}
-
-async function insertAuditEvent(
-  client: PoolClient,
-  input: {
-    libraryId: string | null
-    actorType: 'user' | 'system'
-    actorId: string | null
-    eventType: string
-    correlationId: string
-    payload: Record<string, unknown>
-  },
-) {
-  await client.query(
-    `
-      insert into audit_events (library_id, actor_type, actor_id, event_type, correlation_id, payload)
-      values ($1::uuid, $2, $3, $4, $5::uuid, $6::jsonb)
-    `,
-    [
-      input.libraryId,
-      input.actorType,
-      input.actorId,
-      input.eventType,
-      input.correlationId,
-      JSON.stringify(input.payload),
-    ],
-  )
 }
