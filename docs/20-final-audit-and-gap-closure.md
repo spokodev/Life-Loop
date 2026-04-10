@@ -194,9 +194,11 @@ Covered:
 - Go direction
 - disk-centric execution model
 - agent owns local archive mechanics
+- local disk provider now has atomic write + checksum verify primitives
 
 Still watch:
 - mount detection behavior
+- final local storage-target path binding decision via ADR-015
 - safe resume semantics
 - partial-copy quarantine strategy
 - OS-specific packaging later
