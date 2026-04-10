@@ -38,10 +38,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 3. Billing
 - Add an ADR for Stripe webhook and billing-projection policy before route implementation. **Done:** ADR-017 defines signature verification, idempotent event persistence, minimal billing projection, and no archive-health coupling.
-- Add Stripe config validation for Checkout, Billing, Customer Portal, and webhook signature verification.
-- Keep billing UI Stripe-hosted and explicit.
-- Do not implement custom subscription logic beyond plan/status display and safe webhook persistence.
-- Test missing signature, invalid signature, known subscription events, and separation from archive health.
+- Add Stripe config validation for Checkout, Billing, Customer Portal, and webhook signature verification. **Done:** API env validates complete Stripe config when billing is enabled.
+- Keep billing UI Stripe-hosted and explicit. **Done:** Settings links to API-created Stripe Checkout and Customer Portal sessions only.
+- Do not implement custom subscription logic beyond plan/status display and safe webhook persistence. **Done:** local state is a minimal display projection from verified Stripe events.
+- Test missing signature, invalid signature, known subscription events, and separation from archive health. **Done:** webhook unit coverage verifies signature failure paths, subscription projection, ignored events, and no archive/cleanup/restore coupling in billing projection.
 
 ### 4. Job Execution Architecture
 - Add an ADR for the concrete Postgres-backed job claim, lease, and heartbeat protocol before coding an executor.

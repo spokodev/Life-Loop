@@ -267,6 +267,30 @@ export interface TransitionJobInput {
   requestedBy?: OwnerIdentityInput
 }
 
+export interface BillingStatus {
+  customer?: {
+    stripeCustomerId: string
+    email: string
+    displayName?: string
+  }
+  subscription?: {
+    stripeSubscriptionId: string
+    status: string
+    stripePriceId?: string
+    currentPeriodEnd?: string
+    latestStripeEventId?: string
+  }
+}
+
+export interface CreateBillingCheckoutSessionResponse {
+  sessionId: string
+  url: string
+}
+
+export interface CreateBillingPortalSessionResponse {
+  url: string
+}
+
 export interface DeviceHeartbeatInput {
   observedAt?: string
   hostname?: string

@@ -43,6 +43,8 @@ For the full local runbook, see `docs/23-local-development-runbook.md`.
 
 Production web builds require Clerk keys. API user auth is enabled only when `CLERK_ISSUER_URL` is configured, and then `CLERK_SECRET_KEY` is required so API writes can verify Clerk sessions and load canonical owner identity. CI uses explicitly fake build-time Clerk values only to exercise the static build path without external secrets; real deployments must provide real Clerk configuration.
 
+Stripe billing is disabled unless the API receives the full Stripe env set (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CHECKOUT_PRICE_ID`, and hosted redirect URLs). Billing state is a display-only projection and is not coupled to archive health, cleanup, restore readiness, or device-agent execution.
+
 ## Quality gates
 - `pnpm docs:check`
 - `pnpm lint`

@@ -72,6 +72,28 @@ CLERK_ISSUER_URL=<real-clerk-issuer-url>
 
 When authenticated mode is enabled, web routes are protected by Clerk middleware, onboarding sends a Clerk session token to the API, and API write routes derive `owner/requestedBy` from Clerk instead of trusting body-provided user ids. Device agent calls still use device-scoped credentials rather than Clerk sessions.
 
+## Stripe Billing Mode
+Billing is disabled unless Stripe env is configured. When any Stripe billing variable is set, the API requires the complete set:
+
+```sh
+STRIPE_SECRET_KEY=<real-stripe-secret-key>
+STRIPE_WEBHOOK_SECRET=<real-stripe-webhook-secret>
+STRIPE_CHECKOUT_PRICE_ID=<stripe-price-id>
+STRIPE_CHECKOUT_SUCCESS_URL=http://localhost:3000/settings?checkout=success
+STRIPE_CHECKOUT_CANCEL_URL=http://localhost:3000/settings?checkout=cancelled
+STRIPE_PORTAL_RETURN_URL=http://localhost:3000/settings
+```
+
+Run migrations after pulling billing schema changes:
+
+```sh
+pnpm db:migrate
+```
+
+Rollback note for migration `0006_billing_projection.sql`: before production use, take a database backup; rollback is limited to dropping `billing_events`, `billing_subscriptions`, and `billing_customers` because the current migration runner is forward-only.
+
+The billing projection is display-only for MVP. Stripe webhook events must verify signatures before persistence, and billing state must not change archive health, restore readiness, cleanup eligibility, or device-agent execution.
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 

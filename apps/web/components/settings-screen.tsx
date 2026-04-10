@@ -1,12 +1,15 @@
 'use client'
 
+import { useAuth } from '@clerk/nextjs'
 import type { DashboardSnapshot } from '@life-loop/shared-types'
 import { AppShell, Banner, Button, Card, StatusRow, TransitionState } from '@life-loop/ui'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 import { buildPrimaryNavItems } from './primary-nav'
 
 export function SettingsScreen({
+  apiBaseUrl,
   authEnabled,
   snapshot,
   usingFallback,
@@ -16,7 +19,115 @@ export function SettingsScreen({
   snapshot: DashboardSnapshot
   usingFallback: boolean
 }) {
+  if (authEnabled) {
+    return (
+      <AuthenticatedSettingsScreen
+        apiBaseUrl={apiBaseUrl}
+        authEnabled={authEnabled}
+        snapshot={snapshot}
+        usingFallback={usingFallback}
+      />
+    )
+  }
+
+  return (
+    <SettingsScreenContent
+      apiBaseUrl={apiBaseUrl}
+      authEnabled={authEnabled}
+      snapshot={snapshot}
+      usingFallback={usingFallback}
+    />
+  )
+}
+
+function AuthenticatedSettingsScreen({
+  apiBaseUrl,
+  authEnabled,
+  snapshot,
+  usingFallback,
+}: {
+  apiBaseUrl: string
+  authEnabled: boolean
+  snapshot: DashboardSnapshot
+  usingFallback: boolean
+}) {
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+
+  return (
+    <SettingsScreenContent
+      apiBaseUrl={apiBaseUrl}
+      authEnabled={authEnabled}
+      getToken={getToken}
+      isAuthLoaded={isLoaded}
+      isSignedIn={Boolean(isSignedIn)}
+      snapshot={snapshot}
+      usingFallback={usingFallback}
+    />
+  )
+}
+
+function SettingsScreenContent({
+  apiBaseUrl,
+  authEnabled,
+  getToken,
+  isAuthLoaded = true,
+  isSignedIn = false,
+  snapshot,
+  usingFallback,
+}: {
+  apiBaseUrl: string
+  authEnabled: boolean
+  getToken?: () => Promise<string | null>
+  isAuthLoaded?: boolean
+  isSignedIn?: boolean
+  snapshot: DashboardSnapshot
+  usingFallback: boolean
+}) {
   const router = useRouter()
+  const [billingError, setBillingError] = useState<string | null>(null)
+  const [billingActionState, setBillingActionState] = useState<'idle' | 'in-progress'>('idle')
+
+  async function startStripeFlow(kind: 'checkout-session' | 'customer-portal-session') {
+    setBillingError(null)
+
+    if (!authEnabled) {
+      setBillingError('Stripe billing actions require Clerk auth in MVP.')
+      return
+    }
+
+    if (!isAuthLoaded || !isSignedIn || !getToken) {
+      setBillingError('Sign in with Clerk before opening Stripe billing.')
+      return
+    }
+
+    setBillingActionState('in-progress')
+
+    try {
+      const token = await getToken()
+
+      if (!token) {
+        throw new Error('Clerk did not return a session token for billing.')
+      }
+
+      const response = await fetch(`${apiBaseUrl}/v1/billing/${kind}`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const problem = (await response.json()) as { detail?: string }
+        throw new Error(problem.detail ?? 'Billing request failed.')
+      }
+
+      const payload = (await response.json()) as { url: string }
+      window.location.assign(payload.url)
+    } catch (error) {
+      setBillingActionState('idle')
+      setBillingError(error instanceof Error ? error.message : 'Billing request failed.')
+    }
+  }
 
   return (
     <AppShell
@@ -94,22 +205,40 @@ export function SettingsScreen({
             <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
               Billing
             </p>
-            <h2 className="text-xl font-semibold text-foreground">Stripe placeholder</h2>
+            <h2 className="text-xl font-semibold text-foreground">Stripe-hosted billing</h2>
           </div>
           <div className="divide-y divide-border">
             <StatusRow
               label="Checkout"
-              meta="Stripe Checkout and Billing are the documented MVP direction."
-              tone="info"
-              value="placeholder"
+              meta="Checkout stays on Stripe-hosted UI and does not alter archive health."
+              tone={authEnabled ? 'info' : 'warning'}
+              value={authEnabled ? 'available' : 'requires Clerk'}
             />
             <StatusRow
-              label="Limits"
-              meta="Quota and pricing details remain intentionally deferred until plan packaging is finalized."
-              tone="warning"
-              value="not finalized"
+              label="Subscription status"
+              meta="The local projection is display-only; it never gates cleanup, restore, or archive execution."
+              tone="info"
+              value="display-only"
             />
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={billingActionState === 'in-progress'}
+              onClick={() => void startStripeFlow('checkout-session')}
+            >
+              Open Checkout
+            </Button>
+            <Button
+              disabled={billingActionState === 'in-progress'}
+              onClick={() => void startStripeFlow('customer-portal-session')}
+              variant="secondary"
+            >
+              Open Portal
+            </Button>
+          </div>
+          {billingError ? (
+            <p className="text-sm text-[hsl(var(--color-danger))]">{billingError}</p>
+          ) : null}
         </Card>
       </section>
     </AppShell>
