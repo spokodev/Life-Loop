@@ -13,15 +13,7 @@ import {
 import { useReducedMotion } from 'motion/react'
 import { useRouter } from 'next/navigation'
 
-const navItems = [
-  { label: 'Overview', hint: 'Health, action items, and safe-next steps.', active: true },
-  { label: 'Libraries', hint: 'Archive truth and lifecycle status.' },
-  { label: 'Devices', hint: 'Desktop agents and ingest endpoints.' },
-  { label: 'Storage', hint: 'Primary, replica, preview, and transfer roles.' },
-  { label: 'Jobs', hint: 'Explicit orchestration state and operator review.' },
-  { label: 'Cleanup', hint: 'Safe review before any removal action.' },
-  { label: 'Billing', hint: 'Stripe-hosted subscription surfaces.' },
-]
+import { buildPrimaryNavItems } from './primary-nav'
 
 export function DashboardScreen({
   snapshot,
@@ -51,8 +43,8 @@ export function DashboardScreen({
             <Button onClick={() => router.push('/onboarding')}>Begin onboarding</Button>
           ) : (
             <>
-              <Button onClick={() => router.push('/jobs')} variant="secondary">
-                Review job queue
+              <Button onClick={() => router.push('/activity')} variant="secondary">
+                Review activity
               </Button>
               <Button onClick={() => router.push('/onboarding')}>Enroll another device</Button>
               <Button onClick={() => router.push('/onboarding')} variant="secondary">
@@ -64,7 +56,7 @@ export function DashboardScreen({
         </>
       }
       eyebrow={authEnabled ? 'Clerk shell enabled' : 'Bootstrap mode'}
-      navItems={navItems}
+      navItems={buildPrimaryNavItems('Overview')}
       summary="Calm control plane for archive truth, device health, and cleanup safety. This shell never treats upload completion as archival safety."
       title="Life-Loop"
     >
@@ -190,7 +182,7 @@ export function DashboardScreen({
           }
           nextAction={
             snapshot.jobs.length > 0
-              ? 'Inspect the job queue and keep explicit status transitions visible to operators.'
+              ? 'Inspect the activity feed and keep explicit status transitions visible to operators.'
               : 'Start the API and desktop agent, then register the first library.'
           }
           progress={reducedMotion ? 100 : 68}

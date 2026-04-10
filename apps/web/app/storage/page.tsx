@@ -1,15 +1,15 @@
-import { OnboardingFlow } from '../../components/onboarding-flow'
+import { StorageScreen } from '../../components/storage-screen'
 import { getControlPlaneSnapshot } from '../../lib/control-plane'
 import { webEnv } from '../../lib/env'
 
-export default async function OnboardingPage() {
-  const { snapshot } = await getControlPlaneSnapshot()
+export default async function StoragePage() {
+  const pageData = await getControlPlaneSnapshot()
 
   return (
-    <OnboardingFlow
+    <StorageScreen
       apiBaseUrl={webEnv.NEXT_PUBLIC_API_URL}
       authEnabled={webEnv.clerkEnabled}
-      snapshot={snapshot}
+      {...pageData}
     />
   )
 }

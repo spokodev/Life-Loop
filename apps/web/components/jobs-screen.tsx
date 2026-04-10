@@ -24,15 +24,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { type FormEvent, type ReactNode, useState } from 'react'
 
-const navItems = [
-  { label: 'Overview', hint: 'Health, action items, and safe-next steps.' },
-  { label: 'Libraries', hint: 'Archive truth and lifecycle status.' },
-  { label: 'Devices', hint: 'Desktop agents and ingest endpoints.' },
-  { label: 'Storage', hint: 'Primary, replica, preview, and transfer roles.' },
-  { label: 'Jobs', hint: 'Explicit orchestration state and operator transitions.', active: true },
-  { label: 'Cleanup', hint: 'Safe review before any removal action.' },
-  { label: 'Billing', hint: 'Stripe-hosted subscription surfaces.' },
-]
+import { buildPrimaryNavItems } from './primary-nav'
 
 type StepState =
   | 'idle'
@@ -256,9 +248,9 @@ export function JobsScreen({
         </>
       }
       eyebrow={authEnabled ? 'Clerk shell enabled' : 'Bootstrap mode'}
-      navItems={navItems}
-      summary="Explicit control-plane job state. Work is queued, transitioned, and reviewed deliberately instead of being hidden behind vague background activity."
-      title="Jobs"
+      navItems={buildPrimaryNavItems('Activity')}
+      summary="Explicit control-plane activity state. Jobs are queued, transitioned, and reviewed deliberately instead of being hidden behind vague background activity."
+      title="Activity"
     >
       {usingJobsFallback || usingSnapshotFallback ? (
         <Banner
