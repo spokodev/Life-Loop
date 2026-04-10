@@ -106,6 +106,10 @@ func Save(path string, bindingsFile File) error {
 		return fmt.Errorf("replace storage bindings: %w", err)
 	}
 
+	if err := syncDirectory(directory); err != nil {
+		return fmt.Errorf("flush storage bindings directory: %w", err)
+	}
+
 	cleanupTemp = false
 
 	return nil
@@ -139,4 +143,14 @@ func validate(bindingsFile File) error {
 	}
 
 	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+
+	return directory.Sync()
 }

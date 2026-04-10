@@ -91,7 +91,21 @@ func Save(path string, storedCredential StoredCredential) error {
 		return fmt.Errorf("persist credential file: %w", err)
 	}
 
+	if err := syncDirectory(directory); err != nil {
+		return fmt.Errorf("flush credential directory: %w", err)
+	}
+
 	cleanupTemp = false
 
 	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+
+	return directory.Sync()
 }
