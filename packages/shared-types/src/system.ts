@@ -145,9 +145,23 @@ export interface DeviceEnrollmentToken {
   expiresAt: string
 }
 
+export interface DeviceCredential {
+  token: string
+  issuedAt: string
+}
+
 export interface CreateDeviceResponse {
   device: Device
   enrollmentToken: DeviceEnrollmentToken
+}
+
+export interface RedeemDeviceEnrollmentTokenInput {
+  enrollmentToken: string
+}
+
+export interface RedeemDeviceEnrollmentTokenResponse {
+  device: Device
+  credential: DeviceCredential
 }
 
 export interface CreateStorageTargetInput {
@@ -185,6 +199,31 @@ export interface CreateJobResponse {
 
 export interface TransitionJobInput {
   status: JobStatus
+  reason?: string
+  requestedBy?: OwnerIdentityInput
+}
+
+export interface DeviceHeartbeatInput {
+  observedAt?: string
+  hostname?: string
+  agentVersion?: string
+}
+
+export interface DeviceHeartbeatResponse {
+  acceptedAt: string
+  device: Device
+}
+
+export interface RotateDeviceCredentialInput {
+  requestedBy?: OwnerIdentityInput
+}
+
+export interface RotateDeviceCredentialResponse {
+  device: Device
+  credential: DeviceCredential
+}
+
+export interface RevokeDeviceInput {
   reason?: string
   requestedBy?: OwnerIdentityInput
 }

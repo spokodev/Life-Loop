@@ -210,11 +210,11 @@ Covered:
 - no secret logging
 - local-first originals
 - delete conservatism
+- device-scoped credential redeem / heartbeat / revoke / rotate path per ADR-014
 
 Still watch:
 - webhook verification details
 - storage credential rotation flows
-- device revocation and rotation implementation per ADR-014
 - per-environment MCP permissions
 
 ### DevEx / repo / CI

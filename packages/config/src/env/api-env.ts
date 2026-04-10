@@ -8,6 +8,7 @@ const apiEnvSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   DATABASE_URL: z.string().url().default('postgres://lifeloop:lifeloop@localhost:5434/lifeloop'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  DEVICE_HEARTBEAT_STALE_AFTER_SECONDS: z.coerce.number().int().min(15).max(86_400).default(120),
   CLERK_ISSUER_URL: z.preprocess((value) => {
     if (typeof value !== 'string') {
       return value

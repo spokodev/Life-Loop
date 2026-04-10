@@ -1,3 +1,4 @@
+import { parseApiEnv } from '@life-loop/config'
 import type {
   DashboardSnapshot,
   Device,
@@ -8,6 +9,8 @@ import type {
 } from '@life-loop/shared-types'
 
 import { getDatabasePool } from './client'
+
+const env = parseApiEnv(process.env)
 
 export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const databasePool = getDatabasePool()
@@ -98,14 +101,21 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const storageTargets = storageTargetResult.rows
   const restoreDrills = restoreDrillResult.rows
   const jobs = jobResult.rows
+  const now = Date.now()
+  const staleAfterMs = env.DEVICE_HEARTBEAT_STALE_AFTER_SECONDS * 1000
+  const workerHealthy = deviceResult.rows.some((device) => {
+    if (device.status !== 'active' || !device.lastSeenAt) {
+      return false
+    }
+
+    return now - Date.parse(device.lastSeenAt) <= staleAfterMs
+  })
 
   return {
     health: {
       api: 'healthy',
       database: 'healthy',
-      worker: jobs.some((job) => job.kind === 'device-heartbeat' && job.status === 'succeeded')
-        ? 'healthy'
-        : 'degraded',
+      worker: workerHealthy ? 'healthy' : 'degraded',
       restoreDrills: restoreDrills.some((drill) => drill.status === 'failed')
         ? 'attention-required'
         : 'passing',

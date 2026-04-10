@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg'
 
 export interface AuditEventInsert {
   libraryId: string | null
-  actorType: 'user' | 'system'
+  actorType: 'user' | 'device' | 'system'
   actorId: string | null
   eventType: string
   correlationId: string

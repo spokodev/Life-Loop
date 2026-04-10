@@ -17,7 +17,7 @@ func main() {
 		panic(err)
 	}
 
-	logger := logging.New(cfg.AgentID)
+	logger := logging.New(cfg.DeviceName)
 	service := agent.New(cfg, logger)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

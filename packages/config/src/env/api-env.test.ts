@@ -12,4 +12,5 @@ test('parseApiEnv enables auth only when Clerk issuer is set', () => {
   assert.equal(env.authEnabled, false)
   assert.equal(env.API_PORT, 4000)
   assert.equal(env.CLERK_ISSUER_URL, undefined)
+  assert.equal(env.DEVICE_HEARTBEAT_STALE_AFTER_SECONDS, 120)
 })
