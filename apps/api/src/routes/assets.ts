@@ -4,6 +4,7 @@ import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 
 import { getAssetDetail, listAssets, reportIngestedAsset } from '../db/assets'
+import { parseBearerToken } from '../lib/bearer-token'
 import { problemJson } from '../lib/problem'
 
 const assetBlobSchema = z.object({
@@ -178,14 +179,7 @@ async function parseBody(context: AssetsContext) {
 }
 
 function getBearerToken(context: AssetsContext) {
-  const authorization = context.req.header('authorization') ?? ''
-
-  if (!authorization.startsWith('Bearer ')) {
-    return null
-  }
-
-  const token = authorization.slice('Bearer '.length).trim()
-  return token.length > 0 ? token : null
+  return parseBearerToken(context.req.header('authorization'))
 }
 
 function mapAssetError(context: AssetsContext, error: unknown) {

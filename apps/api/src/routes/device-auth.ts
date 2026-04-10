@@ -7,6 +7,7 @@ import {
   revokeDevice,
   rotateDeviceCredential,
 } from '../db/device-auth'
+import { parseBearerToken } from '../lib/bearer-token'
 import { problemJson } from '../lib/problem'
 
 const emailOwnerSchema = z.object({
@@ -203,14 +204,7 @@ async function parseBody<TSchema extends ZodTypeAny>(context: DeviceAuthContext,
 }
 
 function getBearerToken(context: DeviceAuthContext) {
-  const authorization = context.req.header('authorization') ?? ''
-
-  if (!authorization.startsWith('Bearer ')) {
-    return null
-  }
-
-  const token = authorization.slice('Bearer '.length).trim()
-  return token.length > 0 ? token : null
+  return parseBearerToken(context.req.header('authorization'))
 }
 
 function mapDeviceAuthError(context: DeviceAuthContext, error: unknown) {

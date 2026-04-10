@@ -12,6 +12,7 @@ import {
   listStorageTargets,
   listStorageTargetsForDeviceCredential,
 } from '../db/registry'
+import { parseBearerToken } from '../lib/bearer-token'
 import { problemJson } from '../lib/problem'
 
 const env = parseApiEnv(process.env)
@@ -278,12 +279,5 @@ function mapRegistryError(context: RegistryContext, error: unknown) {
 }
 
 function getBearerToken(context: RegistryContext) {
-  const authorization = context.req.header('authorization') ?? ''
-
-  if (!authorization.startsWith('Bearer ')) {
-    return null
-  }
-
-  const token = authorization.slice('Bearer '.length).trim()
-  return token.length > 0 ? token : null
+  return parseBearerToken(context.req.header('authorization'))
 }
