@@ -44,7 +44,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Test missing signature, invalid signature, known subscription events, and separation from archive health. **Done:** webhook unit coverage verifies signature failure paths, subscription projection, ignored events, and no archive/cleanup/restore coupling in billing projection.
 
 ### 4. Job Execution Architecture
-- Add an ADR for the concrete Postgres-backed job claim, lease, and heartbeat protocol before coding an executor.
+- Add an ADR for the concrete Postgres-backed job claim, lease, and heartbeat protocol before coding an executor. **Done:** ADR-018 defines explicit claim, lease token, heartbeat, timeout recovery, retry, blocked, and terminal-state rules.
 - Implement explicit claim, lease timeout, transition, retry, blocked, and terminal-state APIs without hidden automation.
 - Scope agent job claims to authenticated device/library.
 - Keep job state observable through jobs and activity surfaces.
