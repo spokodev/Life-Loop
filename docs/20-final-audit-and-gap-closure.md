@@ -153,6 +153,7 @@ Covered:
 - DB choice
 - domain model direction
 - background job posture
+- audit-events API now exposes time-ordered operator-readable control-plane activity
 
 Still watch:
 - exact API conventions and versioning policy

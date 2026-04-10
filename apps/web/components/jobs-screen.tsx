@@ -2,6 +2,7 @@
 
 import { idempotencyKeyHeader } from '@life-loop/config'
 import type {
+  AuditEvent,
   CreateJobResponse,
   DashboardSnapshot,
   JobRun,
@@ -45,16 +46,20 @@ type TransitionFormState = {
 
 export function JobsScreen({
   apiBaseUrl,
+  auditEvents,
   authEnabled,
   jobs: initialJobs,
   snapshot: initialSnapshot,
+  usingAuditFallback,
   usingJobsFallback,
   usingSnapshotFallback,
 }: {
   apiBaseUrl: string
+  auditEvents: AuditEvent[]
   authEnabled: boolean
   jobs: JobRun[]
   snapshot: DashboardSnapshot
+  usingAuditFallback: boolean
   usingJobsFallback: boolean
   usingSnapshotFallback: boolean
 }) {
@@ -74,7 +79,11 @@ export function JobsScreen({
 
   const selectedLibraryDevices = snapshot.devices.filter((device) => device.libraryId === libraryId)
 
-  const queueSummary = deriveQueueSummary(jobs, usingJobsFallback || usingSnapshotFallback)
+  const queueSummary = deriveQueueSummary(
+    jobs,
+    auditEvents,
+    usingAuditFallback || usingJobsFallback || usingSnapshotFallback,
+  )
 
   async function handleCreateJob(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -252,10 +261,10 @@ export function JobsScreen({
       summary="Explicit control-plane activity state. Jobs are queued, transitioned, and reviewed deliberately instead of being hidden behind vague background activity."
       title="Activity"
     >
-      {usingJobsFallback || usingSnapshotFallback ? (
+      {usingJobsFallback || usingSnapshotFallback || usingAuditFallback ? (
         <Banner
-          description="The jobs surface is using a conservative fallback for at least one API dependency. This page will not imply active orchestration if the control plane cannot prove it."
-          title="Job data is partially unavailable"
+          description="The activity surface is using a conservative fallback for at least one API dependency. This page will not imply active orchestration or event history if the control plane cannot prove it."
+          title="Activity data is partially unavailable"
           tone="warning"
         />
       ) : null}
@@ -535,6 +544,86 @@ export function JobsScreen({
           })}
         </section>
       )}
+
+      <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+        <Card className="space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
+              Event summary
+            </p>
+            <h2 className="text-xl font-semibold text-foreground">What changed recently</h2>
+          </div>
+          <div className="divide-y divide-border">
+            <StatusRow
+              label="Recorded events"
+              meta="Time-ordered control-plane events visible to operators."
+              tone={auditEvents.length > 0 ? 'info' : 'warning'}
+              value={String(auditEvents.length)}
+            />
+            <StatusRow
+              label="Retry events"
+              meta="Retries stay explicit in the audit trail rather than being flattened away."
+              tone={countRetryEvents(auditEvents) > 0 ? 'warning' : 'neutral'}
+              value={String(countRetryEvents(auditEvents))}
+            />
+            <StatusRow
+              label="Failure or block events"
+              meta="Blocked and failed transitions remain visible until operators review them."
+              tone={countFailureLikeEvents(auditEvents) > 0 ? 'danger' : 'neutral'}
+              value={String(countFailureLikeEvents(auditEvents))}
+            />
+          </div>
+        </Card>
+
+        <Card className="space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
+              Event timeline
+            </p>
+            <h2 className="text-xl font-semibold text-foreground">Recent control-plane events</h2>
+          </div>
+          {auditEvents.length === 0 ? (
+            <EmptyState
+              actionLabel="Review onboarding"
+              description="No audit events are recorded yet in this environment."
+              icon="◌"
+              onAction={() => router.push('/onboarding')}
+              secondary="Once operators create libraries, devices, storage targets, or jobs, those actions appear here as a time-ordered trail."
+              title="No activity events yet"
+            />
+          ) : (
+            <div className="divide-y divide-border">
+              {auditEvents.map((event) => (
+                <div className="space-y-2 py-3" key={event.id}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">{event.summary}</p>
+                      <p className="text-sm text-[hsl(var(--color-text-secondary))]">
+                        {event.details ?? 'No explanation provided.'}
+                      </p>
+                    </div>
+                    <span className={eventBadgeClassName(event)}>{event.actorType}</span>
+                  </div>
+                  <div className="grid gap-1 text-sm text-[hsl(var(--color-text-secondary))] sm:grid-cols-2">
+                    <p>{event.occurredAt}</p>
+                    <p>correlation {event.correlationId}</p>
+                    <p>{event.eventType}</p>
+                    <p>
+                      {event.jobId
+                        ? `job ${event.jobId}`
+                        : event.deviceId
+                          ? `device ${event.deviceId}`
+                          : event.assetId
+                            ? `asset ${event.assetId}`
+                            : 'no linked entity'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
     </AppShell>
   )
 }
@@ -576,7 +665,7 @@ function toneForJobStatus(status: JobStatus) {
   return 'info' as const
 }
 
-function deriveQueueSummary(jobs: JobRun[], usingFallback: boolean) {
+function deriveQueueSummary(jobs: JobRun[], auditEvents: AuditEvent[], usingFallback: boolean) {
   if (usingFallback) {
     return {
       state: 'disconnected-dependency' as const,
@@ -635,8 +724,7 @@ function deriveQueueSummary(jobs: JobRun[], usingFallback: boolean) {
       description:
         'Some jobs are proceeding or completed, but at least one recorded job still needs review or recovery.',
       nextAction: 'Inspect blocked or failed jobs and apply an explicit next transition.',
-      safeNow:
-        'The queue is visible, but blocked work should not be mistaken for finished archive safety.',
+      safeNow: 'The queue is visible, and the audit trail preserves why work blocked or failed.',
       details,
     }
   }
@@ -672,8 +760,8 @@ function deriveQueueSummary(jobs: JobRun[], usingFallback: boolean) {
       title: 'Queue is stable',
       description:
         'Recent jobs completed successfully and are now part of the durable control-plane history.',
-      nextAction: 'Queue the next intentional job or inspect restore drill history.',
-      safeNow: 'Terminal results are visible and not being overwritten by hidden automation.',
+      nextAction: 'Queue the next intentional job or inspect recent activity events.',
+      safeNow: `Terminal results are visible and backed by ${auditEvents.length} recent audit events.`,
       details,
     }
   }
@@ -686,4 +774,39 @@ function deriveQueueSummary(jobs: JobRun[], usingFallback: boolean) {
     safeNow: 'Queued metadata alone does not imply completed archive work.',
     details,
   }
+}
+
+function countRetryEvents(auditEvents: AuditEvent[]) {
+  return auditEvents.filter(
+    (event) =>
+      event.eventType === 'job.status_changed' &&
+      (event.details?.includes('-> retrying') || event.summary.includes('retry')),
+  ).length
+}
+
+function countFailureLikeEvents(auditEvents: AuditEvent[]) {
+  return auditEvents.filter(
+    (event) =>
+      event.eventType === 'job.status_changed' &&
+      (event.details?.includes('-> failed') || event.details?.includes('-> blocked')),
+  ).length
+}
+
+function eventBadgeClassName(event: AuditEvent) {
+  if (
+    event.eventType === 'job.status_changed' &&
+    (event.details?.includes('-> failed') || event.details?.includes('-> blocked'))
+  ) {
+    return 'inline-flex items-center rounded-full bg-[hsl(var(--color-danger)/0.14)] px-2.5 py-1 text-xs font-medium text-[hsl(var(--color-danger))]'
+  }
+
+  if (event.eventType === 'job.status_changed' && event.details?.includes('-> retrying')) {
+    return 'inline-flex items-center rounded-full bg-[hsl(var(--color-warning)/0.14)] px-2.5 py-1 text-xs font-medium text-[hsl(var(--color-warning))]'
+  }
+
+  if (event.actorType === 'device') {
+    return 'inline-flex items-center rounded-full bg-[hsl(var(--color-info)/0.14)] px-2.5 py-1 text-xs font-medium text-[hsl(var(--color-info))]'
+  }
+
+  return 'inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground'
 }

@@ -128,9 +128,15 @@ export interface AuditEvent {
   id: string
   libraryId?: string
   actorType: 'user' | 'device' | 'system'
+  actorId?: string
   eventType: string
   correlationId: string
   occurredAt: string
+  summary: string
+  details?: string
+  jobId?: string
+  assetId?: string
+  deviceId?: string
 }
 
 export interface HealthSummary {

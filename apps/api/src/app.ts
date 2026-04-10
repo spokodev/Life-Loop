@@ -1,9 +1,9 @@
 import { createLogger, parseApiEnv } from '@life-loop/config'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-
 import { correlationIdHeader, createCorrelationId } from './lib/correlation-id'
 import { problemJson } from './lib/problem'
+import { activityRoutes } from './routes/activity'
 import { assetsRoutes } from './routes/assets'
 import { deviceAuthRoutes } from './routes/device-auth'
 import { healthRoutes } from './routes/health'
@@ -55,6 +55,7 @@ app.route('/health', healthRoutes)
 app.route('/v1', systemRoutes)
 app.route('/v1', deviceAuthRoutes)
 app.route('/v1', assetsRoutes)
+app.route('/v1', activityRoutes)
 app.route('/v1', registryRoutes)
 app.route('/v1', jobsRoutes)
 app.route('/v1', restoreRoutes)

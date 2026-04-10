@@ -1,4 +1,7 @@
+import type { AuditEvent } from '@life-loop/shared-types'
 import type { PoolClient } from 'pg'
+
+import { getDatabasePool } from './client'
 
 export interface AuditEventInsert {
   libraryId: string | null
@@ -24,4 +27,144 @@ export async function insertAuditEvent(client: PoolClient, input: AuditEventInse
       JSON.stringify(input.payload),
     ],
   )
+}
+
+type AuditEventRow = {
+  id: string
+  libraryId: string | null
+  actorType: AuditEvent['actorType']
+  actorId: string | null
+  eventType: string
+  correlationId: string
+  occurredAt: string
+  payload: Record<string, unknown>
+}
+
+export async function listAuditEvents(input?: { libraryId?: string }) {
+  const databasePool = getDatabasePool()
+  const result = input?.libraryId
+    ? await databasePool.query<AuditEventRow>(
+        `
+          select
+            id::text,
+            library_id::text as "libraryId",
+            actor_type as "actorType",
+            actor_id as "actorId",
+            event_type as "eventType",
+            correlation_id::text as "correlationId",
+            to_char(occurred_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "occurredAt",
+            payload
+          from audit_events
+          where library_id = $1::uuid
+          order by occurred_at desc
+          limit 50
+        `,
+        [input.libraryId],
+      )
+    : await databasePool.query<AuditEventRow>(
+        `
+          select
+            id::text,
+            library_id::text as "libraryId",
+            actor_type as "actorType",
+            actor_id as "actorId",
+            event_type as "eventType",
+            correlation_id::text as "correlationId",
+            to_char(occurred_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "occurredAt",
+            payload
+          from audit_events
+          order by occurred_at desc
+          limit 50
+        `,
+      )
+
+  return result.rows.map(mapAuditEventRow)
+}
+
+function mapAuditEventRow(row: AuditEventRow): AuditEvent {
+  const explained = explainAuditEvent(row.eventType, row.payload)
+  const jobId = getStringPayloadValue(row.payload, 'jobId')
+  const assetId = getStringPayloadValue(row.payload, 'assetId')
+  const deviceId = getStringPayloadValue(row.payload, 'deviceId')
+
+  return {
+    id: row.id,
+    ...(row.libraryId ? { libraryId: row.libraryId } : {}),
+    actorType: row.actorType,
+    ...(row.actorId ? { actorId: row.actorId } : {}),
+    eventType: row.eventType,
+    correlationId: row.correlationId,
+    occurredAt: row.occurredAt,
+    summary: explained.summary,
+    ...(explained.details ? { details: explained.details } : {}),
+    ...(jobId ? { jobId } : {}),
+    ...(assetId ? { assetId } : {}),
+    ...(deviceId ? { deviceId } : {}),
+  }
+}
+
+function explainAuditEvent(eventType: string, payload: Record<string, unknown>) {
+  switch (eventType) {
+    case 'library.created':
+      return {
+        summary: 'Library created',
+        details: `${getStringPayloadValue(payload, 'slug') ?? 'Unknown slug'} was created as the archive namespace.`,
+      }
+    case 'device.enrollment_token_created':
+      return {
+        summary: 'Device enrollment issued',
+        details: `A pending device was given an enrollment token for ${getStringPayloadValue(payload, 'platform') ?? 'unknown platform'}.`,
+      }
+    case 'storage_target.created':
+      return {
+        summary: 'Storage target registered',
+        details: `${getStringPayloadValue(payload, 'role') ?? 'unknown role'} target using ${getStringPayloadValue(payload, 'provider') ?? 'unknown provider'} was added.`,
+      }
+    case 'asset.ingest_reported':
+      return {
+        summary: 'Asset ingest reported',
+        details: `${getStringPayloadValue(payload, 'filename') ?? 'Unknown asset'} was reported with ${String(payload.placementCount ?? 0)} placements.`,
+      }
+    case 'job.created':
+      return {
+        summary: 'Job queued',
+        details: `${getStringPayloadValue(payload, 'kind') ?? 'unknown job'} was queued explicitly in the control plane.`,
+      }
+    case 'job.status_changed':
+      return {
+        summary: 'Job status changed',
+        details: `${getStringPayloadValue(payload, 'fromStatus') ?? 'unknown'} -> ${getStringPayloadValue(payload, 'toStatus') ?? 'unknown'}${getStringPayloadValue(payload, 'reason') ? ` • ${getStringPayloadValue(payload, 'reason')}` : ''}`,
+      }
+    case 'device.credential_issued':
+      return {
+        summary: 'Device credential issued',
+        details: 'A device redeemed its enrollment token and received an active credential.',
+      }
+    case 'device.heartbeat_recorded':
+      return {
+        summary: 'Device heartbeat recorded',
+        details: `${getStringPayloadValue(payload, 'hostname') ?? 'Unknown host'} checked in with the control plane.`,
+      }
+    case 'device.revoked':
+      return {
+        summary: 'Device revoked',
+        details: getStringPayloadValue(payload, 'reason') ?? 'The device was explicitly revoked.',
+      }
+    case 'device.credential_rotated':
+      return {
+        summary: 'Device credential rotated',
+        details: 'An active device credential was replaced with a newly issued one.',
+      }
+    default:
+      return {
+        summary: eventType,
+        details:
+          'This audit event was recorded, but a specialized explanation has not been added yet.',
+      }
+  }
+}
+
+function getStringPayloadValue(payload: Record<string, unknown>, key: string) {
+  const value = payload[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
 }

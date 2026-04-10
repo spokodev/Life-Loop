@@ -1,6 +1,7 @@
 import type {
   Asset,
   AssetDetail,
+  AuditEvent,
   DashboardSnapshot,
   JobRun,
   RestoreReadiness,
@@ -45,11 +46,14 @@ export async function getControlPlaneSnapshot() {
 }
 
 export async function getActivityPageData() {
-  const [snapshotResult, jobsResult] = await Promise.allSettled([
+  const [snapshotResult, jobsResult, auditEventsResult] = await Promise.allSettled([
     fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
       cache: 'no-store',
     }),
     fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/jobs`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/audit-events`, {
       cache: 'no-store',
     }),
   ])
@@ -71,9 +75,20 @@ export async function getActivityPageData() {
     usingJobsFallback = false
   }
 
+  let auditEvents: AuditEvent[] = []
+  let usingAuditFallback = true
+
+  if (auditEventsResult.status === 'fulfilled' && auditEventsResult.value.ok) {
+    const auditPayload = (await auditEventsResult.value.json()) as { auditEvents: AuditEvent[] }
+    auditEvents = auditPayload.auditEvents
+    usingAuditFallback = false
+  }
+
   return {
+    auditEvents,
     jobs,
     snapshot,
+    usingAuditFallback,
     usingJobsFallback,
     usingSnapshotFallback,
   }
