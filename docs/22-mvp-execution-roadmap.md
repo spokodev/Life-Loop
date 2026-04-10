@@ -37,6 +37,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Test auth-disabled bootstrap behavior, auth-enabled missing Clerk identity, and device credential scoping. **Done:** `user-auth` unit coverage exercises bootstrap, missing Clerk bearer token, derived Clerk actor, issuer mismatch, and device credential rejection.
 
 ### 3. Billing
+- Add an ADR for Stripe webhook and billing-projection policy before route implementation. **Done:** ADR-017 defines signature verification, idempotent event persistence, minimal billing projection, and no archive-health coupling.
 - Add Stripe config validation for Checkout, Billing, Customer Portal, and webhook signature verification.
 - Keep billing UI Stripe-hosted and explicit.
 - Do not implement custom subscription logic beyond plan/status display and safe webhook persistence.
