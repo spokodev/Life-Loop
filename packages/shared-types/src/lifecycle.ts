@@ -16,6 +16,9 @@ export const assetLifecycleStates = [
 
 export type AssetLifecycleState = (typeof assetLifecycleStates)[number]
 
+export const blobKinds = ['original', 'paired-motion', 'normalized', 'preview'] as const
+export type BlobKind = (typeof blobKinds)[number]
+
 export const storageRoles = [
   'archive-primary',
   'archive-replica',

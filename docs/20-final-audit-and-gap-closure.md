@@ -166,12 +166,12 @@ Covered:
 - PostgreSQL as source of control-plane truth
 - restore-drill direction
 - PITR awareness
+- asset/blob/placement ingest write-path with retry-safe idempotency
 
 Still watch:
 - migration discipline
 - tenant scoping and row-level authorization model
 - retry-safe uniqueness constraints
-- blob/placement write-path invariants
 
 ### Mobile
 Status: **good enough to start**

@@ -25,7 +25,7 @@ type EnrollmentTokenRow = DeviceRow & {
   consumedAt?: string
 }
 
-type DeviceCredentialRow = DeviceRow & {
+export type AuthenticatedDeviceCredential = DeviceRow & {
   credentialId: string
   credentialStatus: 'active' | 'rotated' | 'revoked'
   secretHash: string
@@ -428,9 +428,9 @@ async function findDeviceById(client: PoolClient, deviceId: string, forUpdate = 
   return result.rows[0]
 }
 
-async function authenticateDeviceCredential(client: PoolClient, authorizationToken: string) {
+export async function authenticateDeviceCredential(client: PoolClient, authorizationToken: string) {
   const parsedCredential = parseDeviceCredential(authorizationToken)
-  const result = await client.query<DeviceCredentialRow>(
+  const result = await client.query<AuthenticatedDeviceCredential>(
     `
       select
         dc.id::text as "credentialId",

@@ -38,10 +38,13 @@ export interface StorageTarget {
 export interface Asset {
   id: string
   libraryId: string
+  sourceDeviceId?: string
   filename: string
   captureDate?: string
   lifecycleState: AssetLifecycleState
   blobCount: number
+  placementCount: number
+  verifiedPlacementCount: number
 }
 
 export interface Blob {
@@ -226,4 +229,35 @@ export interface RotateDeviceCredentialResponse {
 export interface RevokeDeviceInput {
   reason?: string
   requestedBy?: OwnerIdentityInput
+}
+
+export interface AssetBlobInput {
+  kind: Blob['kind']
+  checksumSha256: string
+  sizeBytes: number
+  mimeType?: string
+}
+
+export interface AssetPlacementInput {
+  blobKind: Blob['kind']
+  storageTargetId: string
+  role: StorageRole
+  checksumSha256?: string
+  verified?: boolean
+  healthState?: PlacementHealthState
+}
+
+export interface ReportIngestAssetInput {
+  libraryId: string
+  filename: string
+  captureDate?: string
+  assetMetadata?: Record<string, unknown>
+  blobs: AssetBlobInput[]
+  placements: AssetPlacementInput[]
+}
+
+export interface ReportIngestAssetResponse {
+  asset: Asset
+  replayed: boolean
+  job: JobRun
 }
