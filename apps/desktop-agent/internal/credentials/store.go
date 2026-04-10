@@ -39,7 +39,16 @@ func Load(path string) (*StoredCredential, error) {
 }
 
 func Save(path string, storedCredential StoredCredential) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if path == "" {
+		return fmt.Errorf("credential path is required")
+	}
+
+	if storedCredential.Credential == "" {
+		return fmt.Errorf("device credential is required")
+	}
+
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return fmt.Errorf("create credential directory: %w", err)
 	}
 
@@ -48,14 +57,41 @@ func Save(path string, storedCredential StoredCredential) error {
 		return fmt.Errorf("encode credential file: %w", err)
 	}
 
-	tempPath := path + ".tmp"
-	if err := os.WriteFile(tempPath, content, 0o600); err != nil {
+	tempFile, err := os.CreateTemp(directory, ".device-credential-*")
+	if err != nil {
+		return fmt.Errorf("create temp credential file: %w", err)
+	}
+
+	tempPath := tempFile.Name()
+	cleanupTemp := true
+	defer func() {
+		_ = tempFile.Close()
+		if cleanupTemp {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	if err := tempFile.Chmod(0o600); err != nil {
+		return fmt.Errorf("set temp credential permissions: %w", err)
+	}
+
+	if _, err := tempFile.Write(append(content, '\n')); err != nil {
 		return fmt.Errorf("write temp credential file: %w", err)
+	}
+
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("flush temp credential file: %w", err)
+	}
+
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("close temp credential file: %w", err)
 	}
 
 	if err := os.Rename(tempPath, path); err != nil {
 		return fmt.Errorf("persist credential file: %w", err)
 	}
+
+	cleanupTemp = false
 
 	return nil
 }
