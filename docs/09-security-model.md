@@ -14,6 +14,8 @@ Local-first originals, least privilege, explicit trust boundaries.
 - no hardcoded secrets
 - separate control plane auth from storage secrets
 - device enrollment tokens must be short-lived
+- desktop agents use device-scoped credentials after token redemption
+- device credentials must support revocation and rotation independently of user sessions
 - support secret rotation
 - log without secrets
 - treat delete flows as privileged operations

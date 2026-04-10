@@ -25,6 +25,8 @@ At registration, the user chooses a storage topology:
 ### Desktop
 - install local agent
 - link to account via one-time enrollment token
+- redeem the token into a device-scoped credential
+- use device-scoped auth for subsequent control-plane heartbeat calls
 - detect local/external storage targets
 - assign roles to targets
 

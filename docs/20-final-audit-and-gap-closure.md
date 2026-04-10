@@ -214,7 +214,7 @@ Covered:
 Still watch:
 - webhook verification details
 - storage credential rotation flows
-- device revocation model
+- device revocation and rotation implementation per ADR-014
 - per-environment MCP permissions
 
 ### DevEx / repo / CI
