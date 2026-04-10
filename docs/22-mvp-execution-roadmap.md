@@ -30,6 +30,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Add smoke-test scripts only when they run locally without external secrets. **Done:** `pnpm smoke:health` checks web/API health endpoints when services are running.
 
 ### 2. Auth and Tenant Safety
+- Add an ADR for Clerk user auth and tenant scoping before route enforcement. **Done:** ADR-016 defines user auth, bootstrap mode, and device-auth separation.
 - Finish Clerk integration for web route protection and authenticated owner context.
 - Enforce Clerk identity on user-owned API write paths when auth is enabled.
 - Preserve documented bootstrap mode for local development.
