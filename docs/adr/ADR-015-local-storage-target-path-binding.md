@@ -1,7 +1,7 @@
 # ADR-015: Local Storage Target Path Binding for Desktop Agent
 
 ## Status
-Proposed
+Accepted
 
 ## Context
 Life-Loop now has:
@@ -20,8 +20,10 @@ That decision is material because it affects:
 
 This should not be improvised inside implementation code.
 
-## Decision Needed
-Define the MVP rule for mapping a control-plane `StorageTarget` to an agent-local filesystem path.
+## Decision
+For MVP, use an **agent-local binding file** to map a control-plane `StorageTarget` id to a concrete filesystem root on a specific desktop agent host.
+
+The control plane remains the authority for storage target identity, role, provider, and control-plane health state. The desktop agent remains the authority for resolving machine-local paths and verifying that those paths exist on the current host.
 
 ## Candidate Directions
 1. **Agent-local binding file**
@@ -48,19 +50,38 @@ Define the MVP rule for mapping a control-plane `StorageTarget` to an agent-loca
    - Cons:
      - more moving parts for MVP
 
-## Current Recommendation
-Prefer **agent-local binding file** for MVP unless a stronger documented need appears.
-
-Why:
+## Rationale
 - best matches ADR-001 control-plane vs data-plane separation
 - avoids turning the hosted control plane into the authority on machine-local paths
 - keeps removable-drive details closer to the machine that can actually verify them
 
 ## Consequences
-If accepted:
 - desktop agent write execution can use a local binding map keyed by storage target id
 - onboarding must include an explicit local binding or repair step
 - web UI can describe missing or stale bindings without pretending it owns the path
+- local path data must not be uploaded to the control plane as part of MVP execution
+- multiple machines can bind the same control-plane target id differently only when later docs explicitly allow that workflow
+
+## MVP Binding File Shape
+The desktop agent reads an agent-local JSON file:
+
+```json
+{
+  "bindings": [
+    {
+      "storageTargetId": "00000000-0000-0000-0000-000000000000",
+      "provider": "local-disk",
+      "rootPath": "/Volumes/LifeLoopPrimary"
+    }
+  ]
+}
+```
+
+Rules:
+- `rootPath` must be absolute.
+- duplicate `storageTargetId` entries are invalid.
+- binding file writes should be local, restrictive-permission, and atomic.
+- the agent may health-check local path providers, but it must not use local-disk health checks for future remote providers.
 
 ## Revisit Trigger
 Revisit when:

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/life-loop/desktop-agent/internal/bindings"
 	"github.com/life-loop/desktop-agent/internal/config"
 	"github.com/life-loop/desktop-agent/internal/controlplane"
 	"github.com/life-loop/desktop-agent/internal/credentials"
 	"github.com/life-loop/desktop-agent/internal/health"
 	"github.com/life-loop/desktop-agent/internal/logging"
+	"github.com/life-loop/desktop-agent/internal/storage"
 )
 
 type Service struct {
@@ -38,6 +40,10 @@ func (s Service) Run(ctx context.Context) error {
 		"controlPlaneUrl": s.config.ControlPlaneURL,
 	})
 
+	if err := s.checkStorageBindings(ctx); err != nil {
+		return err
+	}
+
 	healthServer := health.NewServer(s.config.HealthPort)
 
 	go func() {
@@ -65,6 +71,58 @@ func (s Service) Run(ctx context.Context) error {
 				})
 			}
 		}
+	}
+}
+
+func (s Service) checkStorageBindings(ctx context.Context) error {
+	bindingsFile, err := bindings.Load(s.config.StorageBindingsPath)
+	if err != nil {
+		return fmt.Errorf("load storage bindings: %w", err)
+	}
+
+	if len(bindingsFile.Bindings) == 0 {
+		s.logger.Info("agent.storage_bindings_missing", map[string]any{
+			"bindingsPath": s.config.StorageBindingsPath,
+			"message":      "No local storage target bindings configured yet; archive execution will remain blocked until bindings exist.",
+		})
+		return nil
+	}
+
+	localDiskProvider := storage.LocalDiskProvider{}
+	for _, binding := range bindingsFile.Bindings {
+		if !isLocalPathProvider(binding.Provider) {
+			s.logger.Info("agent.storage_binding_provider_unsupported", map[string]any{
+				"storageTargetId": binding.StorageTargetID,
+				"provider":        binding.Provider,
+				"message":         "Provider health is not checked by the local disk provider.",
+			})
+			continue
+		}
+
+		if err := localDiskProvider.Health(ctx, storage.HealthRequest{RootPath: binding.RootPath}); err != nil {
+			s.logger.Error("agent.storage_binding_unhealthy", map[string]any{
+				"storageTargetId": binding.StorageTargetID,
+				"provider":        binding.Provider,
+				"error":           err.Error(),
+			})
+			continue
+		}
+
+		s.logger.Info("agent.storage_binding_healthy", map[string]any{
+			"storageTargetId": binding.StorageTargetID,
+			"provider":        binding.Provider,
+		})
+	}
+
+	return nil
+}
+
+func isLocalPathProvider(provider string) bool {
+	switch provider {
+	case "local-disk", "external-drive", "LocalDiskProvider", "ExternalDriveProvider":
+		return true
+	default:
+		return false
 	}
 }
 

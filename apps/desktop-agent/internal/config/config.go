@@ -17,6 +17,7 @@ type Config struct {
 	EnrollmentToken      string
 	DeviceCredential     string
 	DeviceCredentialPath string
+	StorageBindingsPath  string
 	AgentVersion         string
 }
 
@@ -43,6 +44,7 @@ func Load() (Config, error) {
 		EnrollmentToken:      os.Getenv("LIFE_LOOP_ENROLLMENT_TOKEN"),
 		DeviceCredential:     os.Getenv("LIFE_LOOP_DEVICE_CREDENTIAL"),
 		DeviceCredentialPath: getEnv("LIFE_LOOP_DEVICE_CREDENTIAL_PATH", defaultCredentialPath()),
+		StorageBindingsPath:  getEnv("LIFE_LOOP_STORAGE_BINDINGS_PATH", defaultStorageBindingsPath()),
 		AgentVersion:         getEnv("LIFE_LOOP_AGENT_VERSION", "0.0.1-dev"),
 	}, nil
 }
@@ -75,4 +77,16 @@ func defaultCredentialPath() string {
 	}
 
 	return filepath.Join(".life-loop", "device-credential.json")
+}
+
+func defaultStorageBindingsPath() string {
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		return filepath.Join(configDir, "life-loop", "storage-bindings.json")
+	}
+
+	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+		return filepath.Join(homeDir, ".life-loop", "storage-bindings.json")
+	}
+
+	return filepath.Join(".life-loop", "storage-bindings.json")
 }

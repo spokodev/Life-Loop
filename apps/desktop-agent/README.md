@@ -17,4 +17,32 @@ Local execution agent in Go.
 - delete and cleanup stay separate from ingest success
 - future storage adapters must implement the shared provider contract
 - enrollment tokens are one-time bootstrap secrets, not long-lived agent identity
-- local storage-target path binding remains an explicit architecture decision under `ADR-015`
+- local storage-target path binding follows accepted `ADR-015`
+- raw local target paths stay in the agent-local binding file and must not be uploaded to the control plane in MVP
+
+## Storage target binding
+MVP storage execution uses an agent-local JSON file keyed by control-plane storage target id.
+
+Default path:
+- macOS/Linux config dir: `life-loop/storage-bindings.json`
+- fallback: `.life-loop/storage-bindings.json`
+
+Example:
+
+```json
+{
+  "bindings": [
+    {
+      "storageTargetId": "00000000-0000-0000-0000-000000000000",
+      "provider": "local-disk",
+      "rootPath": "/Volumes/LifeLoopPrimary"
+    }
+  ]
+}
+```
+
+Rules:
+- `rootPath` must be absolute.
+- duplicate `storageTargetId` entries are rejected.
+- the agent validates root health locally at startup.
+- missing binding files do not stop heartbeat, but archive execution remains blocked until bindings exist.
