@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,16 +10,20 @@ const logger = createLogger('api-migrations', parseApiEnv(process.env).LOG_LEVEL
 
 async function run() {
   const pool = getDatabasePool()
-  const migrationPath = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    'migrations',
-    '0001_init.sql',
-  )
-  const sql = await readFile(migrationPath, 'utf8')
+  const migrationsDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations')
+  const migrationFiles = (await readdir(migrationsDirectory))
+    .filter((file) => file.endsWith('.sql'))
+    .sort()
 
-  logger.info('Running schema migration', { migrationPath })
-  await pool.query(sql)
-  logger.info('Schema migration complete')
+  for (const migrationFile of migrationFiles) {
+    const migrationPath = path.join(migrationsDirectory, migrationFile)
+    const sql = await readFile(migrationPath, 'utf8')
+
+    logger.info('Running schema migration', { migrationPath })
+    await pool.query(sql)
+  }
+
+  logger.info('Schema migration complete', { count: migrationFiles.length })
   await pool.end()
 }
 

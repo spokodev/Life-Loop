@@ -11,6 +11,7 @@ import {
   TransitionState,
 } from '@life-loop/ui'
 import { useReducedMotion } from 'motion/react'
+import { useRouter } from 'next/navigation'
 
 const navItems = [
   { label: 'Overview', hint: 'Health, action items, and safe-next steps.', active: true },
@@ -32,9 +33,11 @@ export function DashboardScreen({
   apiBaseUrl: string
   usingFallback: boolean
 }) {
+  const router = useRouter()
   const reducedMotion = useReducedMotion()
   const hasStorageTargets = snapshot.storageTargets.length > 0
   const hasDevices = snapshot.devices.length > 0
+  const requiresOnboarding = snapshot.libraries.length === 0 || !hasDevices || !hasStorageTargets
   const hasReplicaWarning = snapshot.storageTargets.some(
     (target) => target.role === 'archive-replica' && !target.healthy,
   )
@@ -43,8 +46,16 @@ export function DashboardScreen({
     <AppShell
       actions={
         <>
-          <Button>Register device</Button>
-          <Button variant="secondary">Add storage target</Button>
+          {requiresOnboarding ? (
+            <Button onClick={() => router.push('/onboarding')}>Begin onboarding</Button>
+          ) : (
+            <>
+              <Button onClick={() => router.push('/onboarding')}>Enroll another device</Button>
+              <Button onClick={() => router.push('/onboarding')} variant="secondary">
+                Add storage target
+              </Button>
+            </>
+          )}
           <Button variant="ghost">Review cleanup blockers</Button>
         </>
       }

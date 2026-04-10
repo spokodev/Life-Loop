@@ -104,3 +104,53 @@ export interface DashboardSnapshot {
   jobs: JobRun[]
   restoreDrills: RestoreDrill[]
 }
+
+export const storageTopologies = ['local-first', 'hybrid', 'bring-your-own-storage'] as const
+
+export type StorageTopology = (typeof storageTopologies)[number]
+
+export interface OwnerIdentityInput {
+  email: string
+  displayName?: string
+  clerkUserId?: string
+}
+
+export interface CreateLibraryInput {
+  owner: OwnerIdentityInput
+  library: {
+    name: string
+    slug: string
+    description?: string
+    topology: StorageTopology
+  }
+}
+
+export interface CreateDeviceInput {
+  libraryId: string
+  device: {
+    name: string
+    platform: Device['platform']
+  }
+  requestedBy?: OwnerIdentityInput
+}
+
+export interface DeviceEnrollmentToken {
+  token: string
+  expiresAt: string
+}
+
+export interface CreateDeviceResponse {
+  device: Device
+  enrollmentToken: DeviceEnrollmentToken
+}
+
+export interface CreateStorageTargetInput {
+  libraryId: string
+  storageTarget: {
+    name: string
+    provider: string
+    role: StorageRole
+    writable: boolean
+  }
+  requestedBy?: OwnerIdentityInput
+}

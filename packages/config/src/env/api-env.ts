@@ -8,7 +8,14 @@ const apiEnvSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   DATABASE_URL: z.string().url().default('postgres://lifeloop:lifeloop@localhost:5434/lifeloop'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
-  CLERK_ISSUER_URL: z.string().url().optional(),
+  CLERK_ISSUER_URL: z.preprocess((value) => {
+    if (typeof value !== 'string') {
+      return value
+    }
+
+    const normalized = value.trim()
+    return normalized.length > 0 ? normalized : undefined
+  }, z.string().url().optional()),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 })
 
