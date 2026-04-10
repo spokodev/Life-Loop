@@ -10,6 +10,7 @@ import {
   listDevices,
   listLibraries,
   listStorageTargets,
+  listStorageTargetsForDeviceCredential,
 } from '../db/registry'
 import { problemJson } from '../lib/problem'
 
@@ -145,8 +146,17 @@ registryRoutes.get('/storage-targets', async (context) => {
     })
   }
 
-  const storageTargets = await listStorageTargets(parsedQuery.data.libraryId)
-  return context.json({ storageTargets })
+  const bearerToken = getBearerToken(context)
+
+  try {
+    const storageTargets = bearerToken
+      ? await listStorageTargetsForDeviceCredential(bearerToken, parsedQuery.data.libraryId)
+      : await listStorageTargets(parsedQuery.data.libraryId)
+
+    return context.json({ storageTargets })
+  } catch (error) {
+    return mapRegistryError(context, error)
+  }
 })
 
 registryRoutes.post('/storage-targets', async (context) => {
@@ -206,6 +216,37 @@ async function parseBody<TSchema extends ZodTypeAny>(context: RegistryContext, s
 }
 
 function mapRegistryError(context: RegistryContext, error: unknown) {
+  if (!(error instanceof Error)) {
+    throw error
+  }
+
+  if (
+    error.message.includes('Device credential was not found') ||
+    error.message.includes('Device credential secret is invalid') ||
+    error.message.includes('Device credential must include')
+  ) {
+    return problemJson(context, {
+      title: 'Authentication failed',
+      status: 401,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  if (
+    error.message.includes('Device has been revoked') ||
+    error.message.includes('Device is paused') ||
+    error.message.includes('Device credential is not active') ||
+    error.message.includes('Authenticated device does not belong')
+  ) {
+    return problemJson(context, {
+      title: 'Access denied',
+      status: 403,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
   if (error instanceof Error && error.message.includes('Clerk user id is required')) {
     return problemJson(context, {
       title: 'Clerk identity required',
@@ -234,4 +275,15 @@ function mapRegistryError(context: RegistryContext, error: unknown) {
   }
 
   throw error
+}
+
+function getBearerToken(context: RegistryContext) {
+  const authorization = context.req.header('authorization') ?? ''
+
+  if (!authorization.startsWith('Bearer ')) {
+    return null
+  }
+
+  const token = authorization.slice('Bearer '.length).trim()
+  return token.length > 0 ? token : null
 }

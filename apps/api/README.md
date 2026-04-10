@@ -8,6 +8,7 @@ Hono-based control plane API.
 - manifests and lifecycle state
 - job orchestration metadata
 - storage target registry
+- device-credential-scoped reads for agent storage target coverage
 - restore-drill tracking
 - audit logs and health signals
 

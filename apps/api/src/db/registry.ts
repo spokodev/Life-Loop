@@ -14,6 +14,7 @@ import type { PoolClient } from 'pg'
 
 import { insertAuditEvent } from './audit'
 import { getDatabasePool } from './client'
+import { authenticateDeviceCredential } from './device-auth'
 
 const enrollmentTokenTtlMinutes = 15
 
@@ -109,6 +110,53 @@ export async function listStorageTargets(libraryId?: string) {
       )
 
   return result.rows
+}
+
+export async function listStorageTargetsForDeviceCredential(
+  authorizationToken: string,
+  requestedLibraryId?: string,
+) {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+
+  try {
+    const credential = await authenticateDeviceCredential(client, authorizationToken)
+
+    if (credential.status === 'revoked') {
+      throw new Error('Device has been revoked.')
+    }
+
+    if (credential.status === 'paused') {
+      throw new Error('Device is paused.')
+    }
+
+    const libraryId = requestedLibraryId ?? credential.libraryId
+    if (libraryId !== credential.libraryId) {
+      throw new Error('Authenticated device does not belong to the requested library.')
+    }
+
+    const result = await client.query<StorageTarget>(
+      `
+        select
+          id::text,
+          library_id::text as "libraryId",
+          name,
+          role,
+          provider,
+          writable,
+          healthy,
+          health_state as "healthState"
+        from storage_targets
+        where library_id = $1::uuid
+        order by created_at asc
+      `,
+      [libraryId],
+    )
+
+    return result.rows
+  } finally {
+    client.release()
+  }
 }
 
 export async function createLibraryRecord(

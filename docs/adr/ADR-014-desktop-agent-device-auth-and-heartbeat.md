@@ -33,6 +33,7 @@ For MVP:
    - device trust / active status
    - `last_seen_at`
    - worker-health signals and related audit / job metadata as applicable
+7. Other agent control-plane reads may use the same device credential when scoped back to that credential's library and must not treat device auth as user auth.
 
 ## Why
 - Keeps user auth and machine auth cleanly separated.
