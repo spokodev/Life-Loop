@@ -1,4 +1,10 @@
-import type { Asset, DashboardSnapshot, JobRun } from '@life-loop/shared-types'
+import type {
+  Asset,
+  AssetDetail,
+  DashboardSnapshot,
+  JobRun,
+  RestoreReadiness,
+} from '@life-loop/shared-types'
 
 import { webEnv } from './env'
 
@@ -104,6 +110,88 @@ export async function getLibraryPageData() {
     assets,
     snapshot,
     usingAssetsFallback,
+    usingSnapshotFallback,
+  }
+}
+
+export async function getAssetDetailPageData(assetId: string) {
+  const [snapshotResult, detailResult] = await Promise.allSettled([
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/assets/${assetId}`, {
+      cache: 'no-store',
+    }),
+  ])
+
+  let snapshot = fallbackSnapshot
+  let usingSnapshotFallback = true
+
+  if (snapshotResult.status === 'fulfilled' && snapshotResult.value.ok) {
+    snapshot = (await snapshotResult.value.json()) as DashboardSnapshot
+    usingSnapshotFallback = false
+  }
+
+  let assetDetail: AssetDetail | null = null
+  let detailNotFound = false
+  let usingDetailFallback = true
+
+  if (detailResult.status === 'fulfilled') {
+    if (detailResult.value.status === 404) {
+      detailNotFound = true
+      usingDetailFallback = false
+    } else if (detailResult.value.ok) {
+      assetDetail = (await detailResult.value.json()) as AssetDetail
+      usingDetailFallback = false
+    }
+  }
+
+  return {
+    assetDetail,
+    detailNotFound,
+    snapshot,
+    usingDetailFallback,
+    usingSnapshotFallback,
+  }
+}
+
+export async function getRestorePageData() {
+  const [snapshotResult, readinessResult] = await Promise.allSettled([
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/restore/readiness`, {
+      cache: 'no-store',
+    }),
+  ])
+
+  let snapshot = fallbackSnapshot
+  let usingSnapshotFallback = true
+
+  if (snapshotResult.status === 'fulfilled' && snapshotResult.value.ok) {
+    snapshot = (await snapshotResult.value.json()) as DashboardSnapshot
+    usingSnapshotFallback = false
+  }
+
+  let readiness: RestoreReadiness = {
+    summary: {
+      readyCount: 0,
+      degradedCount: 0,
+      blockedCount: 0,
+    },
+    candidates: [],
+  }
+  let usingReadinessFallback = true
+
+  if (readinessResult.status === 'fulfilled' && readinessResult.value.ok) {
+    readiness = (await readinessResult.value.json()) as RestoreReadiness
+    usingReadinessFallback = false
+  }
+
+  return {
+    readiness,
+    snapshot,
+    usingReadinessFallback,
     usingSnapshotFallback,
   }
 }

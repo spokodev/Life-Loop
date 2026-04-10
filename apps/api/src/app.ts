@@ -9,6 +9,7 @@ import { deviceAuthRoutes } from './routes/device-auth'
 import { healthRoutes } from './routes/health'
 import { jobsRoutes } from './routes/jobs'
 import { registryRoutes } from './routes/registry'
+import { restoreRoutes } from './routes/restore'
 import { systemRoutes } from './routes/system'
 
 type AppBindings = {
@@ -56,6 +57,7 @@ app.route('/v1', deviceAuthRoutes)
 app.route('/v1', assetsRoutes)
 app.route('/v1', registryRoutes)
 app.route('/v1', jobsRoutes)
+app.route('/v1', restoreRoutes)
 
 app.notFound((context) =>
   problemJson(context, {

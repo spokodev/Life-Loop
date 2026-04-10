@@ -1,9 +1,9 @@
 import { RestoreScreen } from '../../components/restore-screen'
-import { getControlPlaneSnapshot } from '../../lib/control-plane'
+import { getRestorePageData } from '../../lib/control-plane'
 import { webEnv } from '../../lib/env'
 
 export default async function RestorePage() {
-  const pageData = await getControlPlaneSnapshot()
+  const pageData = await getRestorePageData()
 
   return (
     <RestoreScreen

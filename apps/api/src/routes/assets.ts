@@ -3,7 +3,7 @@ import { blobKinds, placementHealthStates, storageRoles } from '@life-loop/share
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 
-import { listAssets, reportIngestedAsset } from '../db/assets'
+import { getAssetDetail, listAssets, reportIngestedAsset } from '../db/assets'
 import { problemJson } from '../lib/problem'
 
 const assetBlobSchema = z.object({
@@ -35,6 +35,10 @@ const listAssetsQuerySchema = z.object({
   libraryId: z.string().uuid().optional(),
 })
 
+const assetIdParamSchema = z.object({
+  assetId: z.string().uuid(),
+})
+
 export const assetsRoutes = new Hono<{
   Variables: {
     correlationId: string
@@ -63,6 +67,34 @@ assetsRoutes.get('/assets', async (context) => {
 
   const assets = await listAssets(parsedQuery.data.libraryId)
   return context.json({ assets })
+})
+
+assetsRoutes.get('/assets/:assetId', async (context) => {
+  const parsedParams = assetIdParamSchema.safeParse({
+    assetId: context.req.param('assetId'),
+  })
+
+  if (!parsedParams.success) {
+    return problemJson(context, {
+      title: 'Invalid asset id',
+      status: 422,
+      detail: parsedParams.error.issues[0]?.message ?? 'The asset id is invalid.',
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  const assetDetail = await getAssetDetail(parsedParams.data.assetId)
+
+  if (!assetDetail) {
+    return problemJson(context, {
+      title: 'Asset not found',
+      status: 404,
+      detail: 'The requested asset does not exist.',
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  return context.json(assetDetail)
 })
 
 assetsRoutes.post('/assets/report-ingest', async (context) => {

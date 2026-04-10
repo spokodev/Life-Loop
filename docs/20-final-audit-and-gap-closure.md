@@ -143,6 +143,7 @@ Still watch:
 - billing/plan-change clarity
 - organization switching clarity once multi-tenant UI exists
 - visual QA on implemented screens, not only documented patterns
+- restore execution remains distinct from the new restore-readiness and asset-detail read models
 
 ### API and backend
 Status: **good for MVP**
@@ -167,6 +168,7 @@ Covered:
 - restore-drill direction
 - PITR awareness
 - asset/blob/placement ingest write-path with retry-safe idempotency
+- asset detail and restore-readiness read models now expose conservative per-item recovery state
 
 Still watch:
 - migration discipline

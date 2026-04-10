@@ -53,6 +53,7 @@ export interface Blob {
   kind: 'original' | 'paired-motion' | 'normalized' | 'preview'
   checksumSha256: string
   sizeBytes: number
+  mimeType?: string
 }
 
 export interface Placement {
@@ -63,6 +64,40 @@ export interface Placement {
   checksumSha256: string
   healthState: PlacementHealthState
   verifiedAt?: string
+}
+
+export interface AssetPlacementDetail extends Placement {
+  blobKind: Blob['kind']
+  storageTargetName: string
+  storageTargetProvider: string
+  storageTargetWritable: boolean
+}
+
+export interface AssetDetail {
+  asset: Asset
+  blobs: Blob[]
+  placements: AssetPlacementDetail[]
+}
+
+export interface RestoreCandidate {
+  assetId: string
+  libraryId: string
+  filename: string
+  lifecycleState: AssetLifecycleState
+  restoreStatus: 'ready' | 'degraded' | 'blocked'
+  restoreSource?: string
+  restoreScope: string
+  expectedResult: string
+  warning?: string
+}
+
+export interface RestoreReadiness {
+  summary: {
+    readyCount: number
+    degradedCount: number
+    blockedCount: number
+  }
+  candidates: RestoreCandidate[]
 }
 
 export interface JobRun {

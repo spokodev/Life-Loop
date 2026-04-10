@@ -128,13 +128,22 @@ export function LibraryScreen({
             {hasAssets ? (
               <div className="divide-y divide-border">
                 {assets.map((asset) => (
-                  <StatusRow
-                    key={asset.id}
-                    label={asset.filename}
-                    meta={`${describeLifecycle(asset.lifecycleState)} • ${asset.verifiedPlacementCount}/${asset.placementCount} placements verified`}
-                    tone={assetTone(asset.lifecycleState)}
-                    value={`${asset.blobCount} blobs`}
-                  />
+                  <div className="flex items-start justify-between gap-4 py-3" key={asset.id}>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">{asset.filename}</p>
+                      <div className="text-sm text-[hsl(var(--color-text-secondary))]">
+                        {`${describeLifecycle(asset.lifecycleState)} • ${asset.verifiedPlacementCount}/${asset.placementCount} placements verified`}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div
+                        className={assetBadgeClassName(asset.lifecycleState)}
+                      >{`${asset.blobCount} blobs`}</div>
+                      <Button onClick={() => router.push(`/library/${asset.id}`)} variant="ghost">
+                        View detail
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -229,5 +238,20 @@ function assetTone(lifecycleState: Asset['lifecycleState']) {
       return 'warning'
     default:
       return 'neutral'
+  }
+}
+
+function assetBadgeClassName(lifecycleState: Asset['lifecycleState']) {
+  const tone = assetTone(lifecycleState)
+
+  switch (tone) {
+    case 'success':
+      return 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-[hsl(var(--color-success)/0.14)] text-[hsl(var(--color-success))]'
+    case 'info':
+      return 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-[hsl(var(--color-info)/0.14)] text-[hsl(var(--color-info))]'
+    case 'warning':
+      return 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-[hsl(var(--color-warning)/0.14)] text-[hsl(var(--color-warning))]'
+    default:
+      return 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-[hsl(var(--color-surface-muted))] text-[hsl(var(--color-text-secondary))]'
   }
 }

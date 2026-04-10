@@ -1,11 +1,16 @@
 import type {
   Asset,
   AssetBlobInput,
+  AssetDetail,
+  AssetPlacementDetail,
   AssetPlacementInput,
+  Blob,
   JobRun,
   PlacementHealthState,
   ReportIngestAssetInput,
   ReportIngestAssetResponse,
+  RestoreCandidate,
+  RestoreReadiness,
   StorageTarget,
 } from '@life-loop/shared-types'
 import type { PoolClient } from 'pg'
@@ -33,13 +38,42 @@ type StorageTargetRow = StorageTarget
 
 type BlobRow = {
   id: string
+  assetId: string
   kind: AssetBlobInput['kind']
   checksumSha256: string
+  sizeBytes: number
+  mimeType: string | null
+}
+
+type PlacementDetailRow = {
+  id: string
+  blobId: string
+  blobKind: Blob['kind']
+  storageTargetId: string
+  storageTargetName: string
+  storageTargetProvider: string
+  storageTargetWritable: boolean
+  role: AssetPlacementDetail['role']
+  checksumSha256: string
+  healthState: AssetPlacementDetail['healthState']
+  verifiedAt: string | null
 }
 
 type ExistingReportRow = {
   assetId: string
   jobId: string
+}
+
+type RestoreCandidateRow = {
+  assetId: string
+  libraryId: string
+  filename: string
+  lifecycleState: Asset['lifecycleState']
+  placementId: string | null
+  storageTargetName: string | null
+  role: AssetPlacementDetail['role'] | null
+  healthState: AssetPlacementDetail['healthState'] | null
+  verifiedAt: string | null
 }
 
 export async function listAssets(libraryId?: string) {
@@ -52,6 +86,98 @@ export async function listAssets(libraryId?: string) {
     : await databasePool.query<AssetRow>(`${assetSelectSql} ${assetGroupOrderSql}`)
 
   return result.rows.map(mapAssetRow)
+}
+
+export async function getAssetDetail(assetId: string): Promise<AssetDetail | null> {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+
+  try {
+    const asset = await findAssetById(client, assetId)
+
+    if (!asset) {
+      return null
+    }
+
+    const [blobs, placements] = await Promise.all([
+      listAssetBlobs(client, assetId),
+      listAssetPlacements(client, assetId),
+    ])
+
+    return {
+      asset,
+      blobs,
+      placements,
+    }
+  } finally {
+    client.release()
+  }
+}
+
+export async function getRestoreReadiness(): Promise<RestoreReadiness> {
+  const databasePool = getDatabasePool()
+  const result = await databasePool.query<RestoreCandidateRow>(
+    `
+      with ranked_placements as (
+        select
+          a.id::text as "assetId",
+          a.library_id::text as "libraryId",
+          a.filename,
+          a.lifecycle_state as "lifecycleState",
+          p.id::text as "placementId",
+          st.name as "storageTargetName",
+          p.role,
+          p.health_state as "healthState",
+          to_char(p.verified_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "verifiedAt",
+          row_number() over (
+            partition by a.id
+            order by
+              case
+                when p.verified_at is not null and p.health_state = 'healthy' and p.role = 'archive-primary' then 1
+                when p.verified_at is not null and p.health_state = 'healthy' and p.role = 'archive-replica' then 2
+                when p.health_state = 'healthy' and p.role = 'archive-primary' then 3
+                when p.health_state = 'healthy' and p.role = 'archive-replica' then 4
+                when p.role = 'archive-primary' then 5
+                when p.role = 'archive-replica' then 6
+                else 7
+              end,
+              p.created_at asc nulls last
+          ) as placement_rank
+        from assets a
+        left join blobs b
+          on b.asset_id = a.id
+         and b.kind = 'original'
+        left join placements p on p.blob_id = b.id
+        left join storage_targets st on st.id = p.storage_target_id
+      )
+      select
+        "assetId",
+        "libraryId",
+        filename,
+        "lifecycleState",
+        "placementId",
+        "storageTargetName",
+        role,
+        "healthState",
+        "verifiedAt"
+      from ranked_placements
+      where placement_rank = 1
+      order by filename asc
+      limit 50
+    `,
+  )
+
+  const candidates = result.rows.map(mapRestoreCandidateRow)
+
+  return {
+    summary: {
+      readyCount: candidates.filter((candidate) => candidate.restoreStatus === 'ready').length,
+      degradedCount: candidates.filter((candidate) => candidate.restoreStatus === 'degraded')
+        .length,
+      blockedCount: candidates.filter((candidate) => candidate.restoreStatus === 'blocked').length,
+    },
+    candidates,
+  }
 }
 
 export async function reportIngestedAsset(
@@ -152,8 +278,11 @@ export async function reportIngestedAsset(
           values ($1::uuid, $2, $3, $4, $5)
           returning
             id::text,
+            asset_id::text as "assetId",
             kind,
-            checksum_sha256 as "checksumSha256"
+            checksum_sha256 as "checksumSha256",
+            size_bytes as "sizeBytes",
+            mime_type as "mimeType"
         `,
         [insertedAsset.id, blob.kind, blob.checksumSha256, blob.sizeBytes, blob.mimeType ?? null],
       )
@@ -339,6 +468,53 @@ async function findAssetById(client: PoolClient, assetId: string) {
   return row ? mapAssetRow(row) : null
 }
 
+async function listAssetBlobs(client: PoolClient, assetId: string) {
+  const result = await client.query<BlobRow>(
+    `
+      select
+        id::text,
+        asset_id::text as "assetId",
+        kind,
+        checksum_sha256 as "checksumSha256",
+        size_bytes as "sizeBytes",
+        mime_type as "mimeType"
+      from blobs
+      where asset_id = $1::uuid
+      order by created_at asc
+    `,
+    [assetId],
+  )
+
+  return result.rows.map(mapBlobRow)
+}
+
+async function listAssetPlacements(client: PoolClient, assetId: string) {
+  const result = await client.query<PlacementDetailRow>(
+    `
+      select
+        p.id::text,
+        p.blob_id::text as "blobId",
+        b.kind as "blobKind",
+        p.storage_target_id::text as "storageTargetId",
+        st.name as "storageTargetName",
+        st.provider as "storageTargetProvider",
+        st.writable as "storageTargetWritable",
+        p.role,
+        p.checksum_sha256 as "checksumSha256",
+        p.health_state as "healthState",
+        to_char(p.verified_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "verifiedAt"
+      from placements p
+      inner join blobs b on b.id = p.blob_id
+      inner join storage_targets st on st.id = p.storage_target_id
+      where b.asset_id = $1::uuid
+      order by p.created_at asc
+    `,
+    [assetId],
+  )
+
+  return result.rows.map(mapPlacementRow)
+}
+
 async function findJobById(client: PoolClient, jobId: string) {
   const result = await client.query<JobRow>(
     `
@@ -469,5 +645,69 @@ function mapAssetRow(row: AssetRow): Asset {
     blobCount: row.blobCount,
     placementCount: row.placementCount,
     verifiedPlacementCount: row.verifiedPlacementCount,
+  }
+}
+
+function mapBlobRow(row: BlobRow): Blob {
+  return {
+    id: row.id,
+    assetId: row.assetId,
+    kind: row.kind,
+    checksumSha256: row.checksumSha256,
+    sizeBytes: row.sizeBytes,
+    ...(row.mimeType ? { mimeType: row.mimeType } : {}),
+  }
+}
+
+function mapPlacementRow(row: PlacementDetailRow): AssetPlacementDetail {
+  return {
+    id: row.id,
+    blobId: row.blobId,
+    blobKind: row.blobKind,
+    storageTargetId: row.storageTargetId,
+    storageTargetName: row.storageTargetName,
+    storageTargetProvider: row.storageTargetProvider,
+    storageTargetWritable: row.storageTargetWritable,
+    role: row.role,
+    checksumSha256: row.checksumSha256,
+    healthState: row.healthState,
+    ...(row.verifiedAt ? { verifiedAt: row.verifiedAt } : {}),
+  }
+}
+
+function mapRestoreCandidateRow(row: RestoreCandidateRow): RestoreCandidate {
+  if (row.placementId && row.storageTargetName) {
+    const verifiedHealthy = row.verifiedAt && row.healthState === 'healthy'
+    const status = verifiedHealthy ? 'ready' : 'degraded'
+
+    return {
+      assetId: row.assetId,
+      libraryId: row.libraryId,
+      filename: row.filename,
+      lifecycleState: row.lifecycleState,
+      restoreStatus: status,
+      restoreSource: `${row.storageTargetName} (${row.role ?? 'unknown role'})`,
+      restoreScope: 'Single asset original blob',
+      expectedResult: verifiedHealthy
+        ? 'The original blob should be recoverable from a verified placement.'
+        : 'A restore path is recorded, but the chosen placement still needs verification or health review.',
+      ...(!verifiedHealthy
+        ? {
+            warning:
+              'Do not rely on this restore path as fully proven until the placement is verified healthy.',
+          }
+        : {}),
+    }
+  }
+
+  return {
+    assetId: row.assetId,
+    libraryId: row.libraryId,
+    filename: row.filename,
+    lifecycleState: row.lifecycleState,
+    restoreStatus: 'blocked',
+    restoreScope: 'Single asset original blob',
+    expectedResult: 'No restorable original placement is currently recorded for this asset.',
+    warning: 'Restore readiness is blocked until at least one original placement is recorded.',
   }
 }
