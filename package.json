@@ -12,6 +12,7 @@
     "typecheck": "turbo run typecheck",
     "format": "biome format --write .",
     "docs:check": "node ./scripts/verify-docs.mjs",
+    "smoke:health": "node ./scripts/smoke-health.mjs",
     "compose:validate": "docker compose -f docker-compose.dev.yml config >/dev/null && docker compose -f infra/docker/docker-compose.prod.template.yml config >/dev/null",
     "infra:up": "docker compose -f docker-compose.dev.yml up -d",
     "infra:down": "docker compose -f docker-compose.dev.yml down",

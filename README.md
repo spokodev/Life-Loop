@@ -36,12 +36,17 @@ If implementation conflicts with those documents, stop and update ADRs instead o
    - web health: [http://localhost:3000/api/health](http://localhost:3000/api/health)
    - API live: [http://localhost:4000/health/live](http://localhost:4000/health/live)
    - API ready: [http://localhost:4000/health/ready](http://localhost:4000/health/ready)
+7. Optionally run `pnpm smoke:health` while web and API are running to check those health endpoints from the command line.
+
+Production web builds require Clerk keys. CI uses explicitly fake build-time Clerk values only to exercise the static build path without external secrets; real deployments must provide real Clerk configuration.
 
 ## Quality gates
 - `pnpm docs:check`
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
+- `pnpm build`
+- `pnpm smoke:health` with web and API running
 - `pnpm compose:validate`
 - `pnpm check`
 
