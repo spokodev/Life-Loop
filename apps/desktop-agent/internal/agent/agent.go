@@ -80,9 +80,9 @@ func (s Service) checkStorageBindings(ctx context.Context, storedCredential cred
 		return fmt.Errorf("load storage bindings: %w", err)
 	}
 
-	if storedCredential.LibraryID == "" {
+	if storedCredential.Credential == "" {
 		s.logger.Info("agent.storage_binding_coverage_skipped", map[string]any{
-			"message": "Library id is unavailable for this credential source; local binding coverage cannot be compared to control-plane storage targets.",
+			"message": "Device credential is unavailable; local binding coverage cannot be compared to control-plane storage targets.",
 		})
 	} else if targets, err := s.client.ListStorageTargets(ctx, storedCredential.Credential, storedCredential.LibraryID); err != nil {
 		s.logger.Error("agent.storage_binding_coverage_unavailable", map[string]any{

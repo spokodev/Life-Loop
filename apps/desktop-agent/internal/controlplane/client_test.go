@@ -76,3 +76,39 @@ func TestListStorageTargetsUsesLibraryQueryBearerAndNoBody(t *testing.T) {
 		t.Fatalf("unexpected targets: %#v", targets)
 	}
 }
+
+func TestListStorageTargetsAllowsCredentialScopedRequestWithoutLibraryQuery(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if got := request.URL.RawQuery; got != "" {
+			t.Fatalf("unexpected query for credential-scoped request: %s", got)
+		}
+
+		if got := request.Header.Get("Authorization"); got != "Bearer credential-1" {
+			t.Fatalf("unexpected authorization header: %s", got)
+		}
+
+		response.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(response).Encode(ListStorageTargetsResponse{
+			StorageTargets: []StorageTarget{},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+	}
+
+	targets, err := client.ListStorageTargets(context.Background(), "credential-1", "")
+	if err != nil {
+		t.Fatalf("ListStorageTargets returned error: %v", err)
+	}
+
+	if len(targets) != 0 {
+		t.Fatalf("expected no targets, got %#v", targets)
+	}
+}
