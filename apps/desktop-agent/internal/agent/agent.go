@@ -40,7 +40,7 @@ func (s Service) Run(ctx context.Context) error {
 		"controlPlaneUrl": s.config.ControlPlaneURL,
 	})
 
-	if err := s.checkStorageBindings(ctx); err != nil {
+	if err := s.checkStorageBindings(ctx, storedCredential); err != nil {
 		return err
 	}
 
@@ -74,10 +74,23 @@ func (s Service) Run(ctx context.Context) error {
 	}
 }
 
-func (s Service) checkStorageBindings(ctx context.Context) error {
+func (s Service) checkStorageBindings(ctx context.Context, storedCredential credentials.StoredCredential) error {
 	bindingsFile, err := bindings.Load(s.config.StorageBindingsPath)
 	if err != nil {
 		return fmt.Errorf("load storage bindings: %w", err)
+	}
+
+	if storedCredential.LibraryID == "" {
+		s.logger.Info("agent.storage_binding_coverage_skipped", map[string]any{
+			"message": "Library id is unavailable for this credential source; local binding coverage cannot be compared to control-plane storage targets.",
+		})
+	} else if targets, err := s.client.ListStorageTargets(ctx, storedCredential.Credential, storedCredential.LibraryID); err != nil {
+		s.logger.Error("agent.storage_binding_coverage_unavailable", map[string]any{
+			"libraryId": storedCredential.LibraryID,
+			"error":     err.Error(),
+		})
+	} else {
+		s.reportStorageBindingCoverage(bindings.Coverage(bindingsFile, toTargetReferences(targets)))
 	}
 
 	if len(bindingsFile.Bindings) == 0 {
@@ -103,7 +116,7 @@ func (s Service) checkStorageBindings(ctx context.Context) error {
 			s.logger.Error("agent.storage_binding_unhealthy", map[string]any{
 				"storageTargetId": binding.StorageTargetID,
 				"provider":        binding.Provider,
-				"error":           err.Error(),
+				"reason":          "Local root path is not reachable or is not a directory.",
 			})
 			continue
 		}
@@ -115,6 +128,55 @@ func (s Service) checkStorageBindings(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s Service) reportStorageBindingCoverage(report bindings.CoverageReport) {
+	for _, target := range report.Missing {
+		s.logger.Info("agent.storage_binding_missing_for_target", map[string]any{
+			"storageTargetId": target.StorageTargetID,
+			"provider":        target.Provider,
+			"role":            target.Role,
+			"message":         "Control-plane storage target has no local binding on this agent; archive execution for this target remains blocked.",
+		})
+	}
+
+	for _, mismatch := range report.ProviderMismatches {
+		s.logger.Info("agent.storage_binding_provider_mismatch", map[string]any{
+			"storageTargetId": mismatch.Target.StorageTargetID,
+			"targetProvider":  mismatch.Target.Provider,
+			"bindingProvider": mismatch.Binding.Provider,
+			"role":            mismatch.Target.Role,
+			"message":         "Local binding provider does not match the control-plane storage target provider.",
+		})
+	}
+
+	for _, binding := range report.Extra {
+		s.logger.Info("agent.storage_binding_extra", map[string]any{
+			"storageTargetId": binding.StorageTargetID,
+			"provider":        binding.Provider,
+			"message":         "Local binding is not present in the control-plane storage target registry for this library.",
+		})
+	}
+
+	s.logger.Info("agent.storage_binding_coverage", map[string]any{
+		"boundCount":            len(report.Bound),
+		"missingCount":          len(report.Missing),
+		"extraCount":            len(report.Extra),
+		"providerMismatchCount": len(report.ProviderMismatches),
+	})
+}
+
+func toTargetReferences(targets []controlplane.StorageTarget) []bindings.TargetReference {
+	references := make([]bindings.TargetReference, 0, len(targets))
+	for _, target := range targets {
+		references = append(references, bindings.TargetReference{
+			StorageTargetID: target.ID,
+			Provider:        target.Provider,
+			Role:            target.Role,
+		})
+	}
+
+	return references
 }
 
 func isLocalPathProvider(provider string) bool {

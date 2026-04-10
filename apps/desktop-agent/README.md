@@ -44,5 +44,7 @@ Example:
 Rules:
 - `rootPath` must be absolute.
 - duplicate `storageTargetId` entries are rejected.
+- when a stored credential includes `libraryId`, the agent compares local binding ids/providers with control-plane storage targets.
+- missing, extra, or provider-mismatched bindings are logged without exposing local root paths to the control plane.
 - the agent validates root health locally at startup.
 - missing binding files do not stop heartbeat, but archive execution remains blocked until bindings exist.

@@ -81,6 +81,7 @@ Rules:
 - `rootPath` must be absolute.
 - duplicate `storageTargetId` entries are invalid.
 - binding file writes should be local, restrictive-permission, and atomic.
+- when the agent has a library-scoped credential, it may compare local binding ids/providers with control-plane storage target metadata and report missing, extra, or mismatched bindings without uploading `rootPath`.
 - the agent may health-check local path providers, but it must not use local-disk health checks for future remote providers.
 
 ## Revisit Trigger

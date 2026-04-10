@@ -92,3 +92,62 @@ func TestLoadRejectsDuplicateStorageTargetIDs(t *testing.T) {
 		t.Fatalf("expected duplicate storage target ids to be rejected")
 	}
 }
+
+func TestCoverageReportsBoundMissingExtraAndProviderMismatch(t *testing.T) {
+	t.Parallel()
+
+	bindingsFile := File{
+		Bindings: []StorageTargetBinding{
+			{
+				StorageTargetID: "target-bound",
+				Provider:        "local-disk",
+				RootPath:        filepath.Join(t.TempDir(), "bound"),
+			},
+			{
+				StorageTargetID: "target-mismatch",
+				Provider:        "external-drive",
+				RootPath:        filepath.Join(t.TempDir(), "mismatch"),
+			},
+			{
+				StorageTargetID: "target-extra",
+				Provider:        "local-disk",
+				RootPath:        filepath.Join(t.TempDir(), "extra"),
+			},
+		},
+	}
+
+	report := Coverage(bindingsFile, []TargetReference{
+		{
+			StorageTargetID: "target-bound",
+			Provider:        "LocalDiskProvider",
+			Role:            "archive-primary",
+		},
+		{
+			StorageTargetID: "target-missing",
+			Provider:        "local-disk",
+			Role:            "archive-replica",
+		},
+		{
+			StorageTargetID: "target-mismatch",
+			Provider:        "local-disk",
+			Role:            "archive-primary",
+		},
+	})
+
+	if len(report.Bound) != 1 || report.Bound[0].StorageTargetID != "target-bound" {
+		t.Fatalf("unexpected bound targets: %#v", report.Bound)
+	}
+
+	if len(report.Missing) != 1 || report.Missing[0].StorageTargetID != "target-missing" {
+		t.Fatalf("unexpected missing targets: %#v", report.Missing)
+	}
+
+	if len(report.Extra) != 1 || report.Extra[0].StorageTargetID != "target-extra" {
+		t.Fatalf("unexpected extra bindings: %#v", report.Extra)
+	}
+
+	if len(report.ProviderMismatches) != 1 ||
+		report.ProviderMismatches[0].Target.StorageTargetID != "target-mismatch" {
+		t.Fatalf("unexpected provider mismatches: %#v", report.ProviderMismatches)
+	}
+}

@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -45,6 +47,21 @@ type HeartbeatResponse struct {
 	Device     Device `json:"device"`
 }
 
+type StorageTarget struct {
+	ID          string `json:"id"`
+	LibraryID   string `json:"libraryId"`
+	Name        string `json:"name"`
+	Role        string `json:"role"`
+	Provider    string `json:"provider"`
+	Writable    bool   `json:"writable"`
+	Healthy     bool   `json:"healthy"`
+	HealthState string `json:"healthState"`
+}
+
+type ListStorageTargetsResponse struct {
+	StorageTargets []StorageTarget `json:"storageTargets"`
+}
+
 type problemResponse struct {
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
@@ -81,18 +98,42 @@ func (c *Client) SendHeartbeat(ctx context.Context, credential string, request H
 	return responseBody, nil
 }
 
-func (c *Client) doJSON(ctx context.Context, method string, path string, body any, bearerToken string, target any) error {
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal request body: %w", err)
+func (c *Client) ListStorageTargets(ctx context.Context, credential string, libraryID string) ([]StorageTarget, error) {
+	endpoint := "/v1/storage-targets"
+	if libraryID != "" {
+		query := url.Values{}
+		query.Set("libraryId", libraryID)
+		endpoint += "?" + query.Encode()
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(payload))
+	responseBody := ListStorageTargetsResponse{}
+	err := c.doJSON(ctx, http.MethodGet, endpoint, nil, credential, &responseBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return responseBody.StorageTargets, nil
+}
+
+func (c *Client) doJSON(ctx context.Context, method string, path string, body any, bearerToken string, target any) error {
+	var requestBody io.Reader = http.NoBody
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal request body: %w", err)
+		}
+
+		requestBody = bytes.NewReader(payload)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, requestBody)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	request.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	request.Header.Set("Accept", "application/json")
 
 	if bearerToken != "" {
