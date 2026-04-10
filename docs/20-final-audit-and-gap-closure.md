@@ -21,6 +21,7 @@ This pack should be treated as **implementation-ready for Phase 1 bootstrap**, n
 - Replica semantics are favored over peer-to-peer disk sync.
 - Delete-after-verify posture is correct.
 - Restore drills are required rather than treated as optional.
+- storage-readiness surfaces now expose target-level verification backlog and conservative replica state
 
 ### UX and design-system direction
 - A project-owned design system is chosen.

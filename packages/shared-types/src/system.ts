@@ -100,6 +100,26 @@ export interface RestoreReadiness {
   candidates: RestoreCandidate[]
 }
 
+export interface StorageReadinessTarget extends StorageTarget {
+  connectionState: 'healthy' | 'verifying' | 'stale' | 'unavailable'
+  placementCount: number
+  verifiedPlacementCount: number
+  pendingVerificationCount: number
+  spacePressure: 'telemetry-unavailable'
+  lastVerifiedAt?: string
+  warning?: string
+}
+
+export interface StorageReadiness {
+  summary: {
+    healthyTargets: number
+    staleTargets: number
+    unavailableTargets: number
+    pendingVerificationPlacements: number
+  }
+  targets: StorageReadinessTarget[]
+}
+
 export interface JobRun {
   id: string
   libraryId?: string

@@ -10,6 +10,7 @@ import { healthRoutes } from './routes/health'
 import { jobsRoutes } from './routes/jobs'
 import { registryRoutes } from './routes/registry'
 import { restoreRoutes } from './routes/restore'
+import { storageRoutes } from './routes/storage'
 import { systemRoutes } from './routes/system'
 
 type AppBindings = {
@@ -59,6 +60,7 @@ app.route('/v1', activityRoutes)
 app.route('/v1', registryRoutes)
 app.route('/v1', jobsRoutes)
 app.route('/v1', restoreRoutes)
+app.route('/v1', storageRoutes)
 
 app.notFound((context) =>
   problemJson(context, {

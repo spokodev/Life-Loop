@@ -1,9 +1,9 @@
 import { StorageScreen } from '../../components/storage-screen'
-import { getControlPlaneSnapshot } from '../../lib/control-plane'
+import { getStoragePageData } from '../../lib/control-plane'
 import { webEnv } from '../../lib/env'
 
 export default async function StoragePage() {
-  const pageData = await getControlPlaneSnapshot()
+  const pageData = await getStoragePageData()
 
   return (
     <StorageScreen

@@ -5,6 +5,7 @@ import type {
   DashboardSnapshot,
   JobRun,
   RestoreReadiness,
+  StorageReadiness,
 } from '@life-loop/shared-types'
 
 import { webEnv } from './env'
@@ -200,6 +201,48 @@ export async function getRestorePageData() {
 
   if (readinessResult.status === 'fulfilled' && readinessResult.value.ok) {
     readiness = (await readinessResult.value.json()) as RestoreReadiness
+    usingReadinessFallback = false
+  }
+
+  return {
+    readiness,
+    snapshot,
+    usingReadinessFallback,
+    usingSnapshotFallback,
+  }
+}
+
+export async function getStoragePageData() {
+  const [snapshotResult, readinessResult] = await Promise.allSettled([
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/storage/readiness`, {
+      cache: 'no-store',
+    }),
+  ])
+
+  let snapshot = fallbackSnapshot
+  let usingSnapshotFallback = true
+
+  if (snapshotResult.status === 'fulfilled' && snapshotResult.value.ok) {
+    snapshot = (await snapshotResult.value.json()) as DashboardSnapshot
+    usingSnapshotFallback = false
+  }
+
+  let readiness: StorageReadiness = {
+    summary: {
+      healthyTargets: 0,
+      staleTargets: 0,
+      unavailableTargets: 0,
+      pendingVerificationPlacements: 0,
+    },
+    targets: [],
+  }
+  let usingReadinessFallback = true
+
+  if (readinessResult.status === 'fulfilled' && readinessResult.value.ok) {
+    readiness = (await readinessResult.value.json()) as StorageReadiness
     usingReadinessFallback = false
   }
 
