@@ -12,6 +12,7 @@ Repository documentation is authoritative. Start with:
 - `docs/20-final-audit-and-gap-closure.md`
 - `docs/22-mvp-execution-roadmap.md`
 - `docs/23-local-development-runbook.md`
+- `docs/24-production-deployment-runbook.md`
 - `docs/adr/`
 - `docs/design/`
 - `docs/qa/`
@@ -33,7 +34,7 @@ For the full local runbook, see `docs/23-local-development-runbook.md`.
 
 1. Copy `.env.example` values into your shell or app-specific env files as needed.
 2. Start local infrastructure with `pnpm infra:up`.
-3. Install dependencies with `pnpm install`.
+3. Install dependencies with `pnpm install --frozen-lockfile`.
 4. Run database schema setup with `pnpm db:migrate`.
 5. Start the control plane with `pnpm dev`.
 6. Open [http://localhost:3000](http://localhost:3000) and verify:
@@ -64,5 +65,5 @@ Stripe billing is disabled unless the API receives the full Stripe env set (`STR
 - Logs to stdout/stderr
 - Health checks and `restart: unless-stopped`
 
-The template lives at `infra/docker/docker-compose.prod.template.yml`. It is intentionally limited to the control plane and does not turn the VPS into the primary archive for originals.
+The template lives at `infra/docker/docker-compose.prod.template.yml`. The deployment runbook lives at `docs/24-production-deployment-runbook.md`. The template is intentionally limited to the control plane and does not turn the VPS into the primary archive for originals.
 Use a real `.env.production` file at deploy time; `infra/docker/.env.production.example` exists only as a placeholder reference.

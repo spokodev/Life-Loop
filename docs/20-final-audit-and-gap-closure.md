@@ -39,6 +39,7 @@ This pack should be treated as **implementation-ready for Phase 1 bootstrap**, n
 - Single-VPS deployment model matches the actual infrastructure.
 - Docker Compose and shared Traefik fit the server baseline.
 - Healthchecks, restart policy, logging, and operational README expectations are present.
+- `/opt/life-loop` production runbook now covers Compose deployment, explicit migrations, backup/restore drill, rollback notes, and hosted staging as convenience storage only.
 
 ### Engineering quality
 - QA and review checklists exist.

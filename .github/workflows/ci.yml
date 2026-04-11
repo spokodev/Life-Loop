@@ -30,3 +30,4 @@ jobs:
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5hY2NvdW50cy5kZXYk
           CLERK_SECRET_KEY: sk_test_build_time_placeholder_for_static_ci_build
       - run: pnpm compose:validate
+      - run: pnpm prod:check

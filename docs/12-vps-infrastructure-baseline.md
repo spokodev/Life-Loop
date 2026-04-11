@@ -20,17 +20,19 @@ Single Hetzner VPS with shared infrastructure and Docker Compose per project.
 - `restart: unless-stopped`
 - logs to stdout/stderr
 
-## Recommended Life-Loop deployment split
-### `/opt/life-loop-api`
-- control plane API
-- Postgres connectivity
-- optional worker
+## Recommended Life-Loop deployment layout
+### `/opt/life-loop`
+- `docker-compose.prod.yml`
+- `.env.production`
+- control plane API service
+- Next.js web app service behind shared Traefik
+- Postgres service and persistent data under `/opt/life-loop/data/postgres`
+- hosted staging convenience storage under `/opt/life-loop/data/staging`
+- backups under `/opt/life-loop/backups`
 
-### `/opt/life-loop-web`
-- Next.js web app behind shared Traefik
-
-### `/opt/life-loop-agent` (optional if server-side workers exist)
-- only if needed; most desktop agent logic remains on user machines
+### Desktop agents
+- Most desktop agent logic remains on user machines.
+- Do not add a server-side archive executor unless a future ADR changes the data-plane boundary.
 
 ## Important note
 Do not over-centralize data plane behavior on the VPS. The VPS is primarily a control plane and optional preview/selected-online layer.

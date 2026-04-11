@@ -78,9 +78,9 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Add simulator-build or Swift tests where local tooling supports them; otherwise document the exact Xcode validation command and blocker. **Partial:** Swift tests are present; Xcode validation command is documented in `apps/ios/README.md`.
 
 ### 9. Production Hardening
-- Finalize Docker production templates, env examples, healthchecks, migrations, Traefik labels, backup/restore notes, and `/opt/life-loop` deployment runbook.
-- Add migration discipline and rollback notes for each schema change.
-- Validate Docker Compose config, health endpoints, CI, and absence of `/home/deploy` production paths.
+- Finalize Docker production templates, env examples, healthchecks, migrations, Traefik labels, backup/restore notes, and `/opt/life-loop` deployment runbook. **Partial:** production compose/env templates now cover API/web/Postgres envs, persistent `/opt/life-loop` data paths, hosted staging storage, shared Traefik labels, and healthchecks; `docs/24-production-deployment-runbook.md` covers deployment, migration, backup, restore-drill, and rollback procedures.
+- Add migration discipline and rollback notes for each schema change. **Partial:** the production runbook requires explicit pre-migration backups and release migration notes; individual migration files remain forward-only.
+- Validate Docker Compose config, health endpoints, CI, and absence of `/home/deploy` production paths. **Partial:** `pnpm prod:check` validates the production baseline and CI runs it; live production health endpoint validation still requires deployed services.
 
 ### 10. Final MVP Audit
 - Run architecture, code, release-readiness, UI, transition, reduced-motion, security, and VPS QA checklists.
