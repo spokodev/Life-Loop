@@ -7,6 +7,7 @@ export type PrimaryNavSection =
   | 'Storage'
   | 'Activity'
   | 'Restore'
+  | 'Cleanup'
   | 'Settings'
 
 const navDefinitions: Array<{
@@ -19,6 +20,7 @@ const navDefinitions: Array<{
   { label: 'Storage', hint: 'Primary, replica, preview, and transfer roles.' },
   { label: 'Activity', hint: 'What changed, failed, or recovered.' },
   { label: 'Restore', hint: 'What can be recovered and from where.' },
+  { label: 'Cleanup', hint: 'Manual phone cleanup readiness and blockers.' },
   { label: 'Settings', hint: 'Policies, limits, and billing separation.' },
 ]
 

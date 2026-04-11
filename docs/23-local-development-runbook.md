@@ -114,6 +114,17 @@ Rollback note for migration `0007_job_claim_leases.sql`: before production use, 
 
 Migration `0008_restore_drill_evidence.sql` adds restore-drill evidence rows. Evidence is separate from restore-readiness metadata: a drill can pass only after sampled assets have explicit `verified` evidence records. Rollback is limited to dropping `restore_drill_evidence` because the current migration runner is forward-only.
 
+## Cleanup Review
+Cleanup is manual-only in MVP. The control plane exposes a read-only cleanup review projection:
+
+```sh
+curl -sS http://localhost:4000/v1/cleanup/review
+```
+
+The projection is blocked unless an asset has a verified archive-primary placement, verified archive-replica placement, and asset-level verified restore-drill evidence from a passed drill. The web cleanup screen is available at `http://localhost:3000/cleanup`.
+
+This slice adds no database migration, no delete endpoint, no lifecycle-state mutation, and no auto-delete behavior. Upload or hosted staging success alone must never create cleanup eligibility.
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 

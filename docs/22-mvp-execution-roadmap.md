@@ -66,10 +66,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Test ready, degraded, blocked, partial-success, and failed restore evidence paths.
 
 ### 7. Cleanup Policy
-- Implement manual cleanup-review jobs and UI states only.
-- Keep delete disabled/manual for MVP.
-- Prove upload success alone never creates cleanup eligibility.
-- Keep cleanup blocked without verified primary, verified replica, and restore posture.
+- Implement manual cleanup-review jobs and UI states only. **Partial:** cleanup now has a read-only API/web review surface; cleanup-review job execution remains intentionally unimplemented until an explicit manual review workflow exists.
+- Keep delete disabled/manual for MVP. **Done:** the cleanup slice adds no delete endpoint, no lifecycle mutation, and no auto-delete behavior.
+- Prove upload success alone never creates cleanup eligibility. **Done:** cleanup readiness unit coverage blocks ingested/upload-only assets.
+- Keep cleanup blocked without verified primary, verified replica, and restore posture. **Done:** cleanup readiness requires verified archive-primary, verified archive-replica, and asset-level verified restore-drill evidence from a passed drill before an item can enter manual review.
 
 ### 8. iPhone Ingest MVP
 - Add `apps/ios` SwiftUI foundation with PhotosPicker and background URLSession upload.

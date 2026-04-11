@@ -52,7 +52,9 @@ export function DashboardScreen({
               </Button>
             </>
           )}
-          <Button variant="ghost">Review cleanup blockers</Button>
+          <Button onClick={() => router.push('/cleanup')} variant="ghost">
+            Review cleanup blockers
+          </Button>
         </>
       }
       eyebrow={authEnabled ? 'Clerk shell enabled' : 'Bootstrap mode'}

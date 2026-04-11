@@ -100,6 +100,34 @@ export interface RestoreReadiness {
   candidates: RestoreCandidate[]
 }
 
+export type CleanupReadinessStatus = 'eligible_for_review' | 'blocked' | 'manual_review'
+
+export interface CleanupCandidate {
+  assetId: string
+  libraryId: string
+  filename: string
+  lifecycleState: AssetLifecycleState
+  cleanupStatus: CleanupReadinessStatus
+  blockers: string[]
+  evidence: {
+    verifiedPrimaryCount: number
+    verifiedReplicaCount: number
+    verifiedRestoreEvidenceCount: number
+    restoreDrillPassed: boolean
+    latestRestoreDrillStatus?: RestoreDrill['status']
+  }
+}
+
+export interface CleanupReviewReadiness {
+  summary: {
+    eligibleForReviewCount: number
+    blockedCount: number
+    manualReviewCount: number
+    totalCandidates: number
+  }
+  candidates: CleanupCandidate[]
+}
+
 export interface StorageReadinessTarget extends StorageTarget {
   connectionState: 'healthy' | 'verifying' | 'stale' | 'unavailable'
   placementCount: number

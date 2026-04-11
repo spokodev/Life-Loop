@@ -6,6 +6,7 @@ import { problemJson } from './lib/problem'
 import { activityRoutes } from './routes/activity'
 import { assetsRoutes } from './routes/assets'
 import { billingRoutes } from './routes/billing'
+import { cleanupRoutes } from './routes/cleanup'
 import { deviceAuthRoutes } from './routes/device-auth'
 import { healthRoutes } from './routes/health'
 import { jobsRoutes } from './routes/jobs'
@@ -59,6 +60,7 @@ app.route('/v1', deviceAuthRoutes)
 app.route('/v1', assetsRoutes)
 app.route('/v1', activityRoutes)
 app.route('/v1', billingRoutes)
+app.route('/v1', cleanupRoutes)
 app.route('/v1', registryRoutes)
 app.route('/v1', jobsRoutes)
 app.route('/v1', restoreRoutes)

@@ -2,6 +2,7 @@ import type {
   Asset,
   AssetDetail,
   AuditEvent,
+  CleanupReviewReadiness,
   DashboardSnapshot,
   JobRun,
   RestoreDrillDetail,
@@ -223,6 +224,48 @@ export async function getRestorePageData() {
     snapshot,
     usingDrillDetailsFallback,
     usingReadinessFallback,
+    usingSnapshotFallback,
+  }
+}
+
+export async function getCleanupPageData() {
+  const [snapshotResult, cleanupResult] = await Promise.allSettled([
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/cleanup/review`, {
+      cache: 'no-store',
+    }),
+  ])
+
+  let snapshot = fallbackSnapshot
+  let usingSnapshotFallback = true
+
+  if (snapshotResult.status === 'fulfilled' && snapshotResult.value.ok) {
+    snapshot = (await snapshotResult.value.json()) as DashboardSnapshot
+    usingSnapshotFallback = false
+  }
+
+  let cleanupReadiness: CleanupReviewReadiness = {
+    summary: {
+      eligibleForReviewCount: 0,
+      blockedCount: 0,
+      manualReviewCount: 0,
+      totalCandidates: 0,
+    },
+    candidates: [],
+  }
+  let usingCleanupFallback = true
+
+  if (cleanupResult.status === 'fulfilled' && cleanupResult.value.ok) {
+    cleanupReadiness = (await cleanupResult.value.json()) as CleanupReviewReadiness
+    usingCleanupFallback = false
+  }
+
+  return {
+    cleanupReadiness,
+    snapshot,
+    usingCleanupFallback,
     usingSnapshotFallback,
   }
 }
