@@ -28,11 +28,12 @@
 - background job engine choice for MVP = Postgres-backed
 - billing model = Stripe
 - iOS upload target for MVP = cloud-staging first
+- iOS hosted-staging quotas / retention values = ADR-021
 - observability baseline = structured logs + correlation IDs + OTel where practical
 - restore baseline = mandatory restore drills
 
 ## Still not fully closed
-- exact hosted-storage quotas / retention values
+- exact hosted preview / selected-online quotas / retention values
 - exact Phase 1 production service split after infra audit
 - exact timing for BYO storage rollout
 

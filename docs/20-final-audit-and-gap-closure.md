@@ -106,7 +106,7 @@ Rationale:
 
 These are not blockers for bootstrap, but they must not be forgotten:
 
-1. Exact hosted-storage quotas and retention numbers.
+1. Exact hosted preview / selected-online quotas and retention numbers. iPhone hosted-staging quotas and retention are closed by ADR-021.
 2. Final production service split after the VPS audit is complete.
 3. When BYO-storage becomes part of the roadmap beyond placeholders.
 4. Whether MinIO is needed in local dev immediately or can wait until previews/selected-online are active.

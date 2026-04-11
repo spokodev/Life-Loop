@@ -73,7 +73,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 8. iPhone Ingest MVP
 - Add `apps/ios` SwiftUI foundation with PhotosPicker and background URLSession upload.
-- Add hosted cloud-staging API/storage abstraction only after retention/quota details are documented.
+- Add hosted cloud-staging API/storage abstraction only after retention/quota details are documented. **Done:** ADR-021 defines MVP hosted-staging size, quota, retention, and safety semantics.
 - Show mobile asset state as uploaded, staged, archiving, verified, or blocked without equating upload with archive safety.
 - Add simulator-build or Swift tests where local tooling supports them; otherwise document the exact Xcode validation command and blocker.
 

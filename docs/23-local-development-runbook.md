@@ -125,6 +125,17 @@ The projection is blocked unless an asset has a verified archive-primary placeme
 
 This slice adds no database migration, no delete endpoint, no lifecycle-state mutation, and no auto-delete behavior. Upload or hosted staging success alone must never create cleanup eligibility.
 
+## Hosted iPhone Staging Policy
+ADR-021 defines the MVP hosted-staging policy before iPhone ingest implementation:
+- maximum object size: 2 GiB,
+- maximum pending staged bytes per library: 25 GiB,
+- maximum pending staged objects per library: 500,
+- upload reservation expiry: 24 hours,
+- completed staging retention: 7 days,
+- post-archive staging retention eligibility: 24 hours after verified primary, verified replica, and restore evidence exist.
+
+Hosted staging is temporary convenience storage, not archive-primary or archive-replica storage. Upload completion must never mark an asset archived, verified, restore-ready, cleanup-eligible, or safe to remove from the phone.
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 
