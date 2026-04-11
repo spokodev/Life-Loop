@@ -1,5 +1,6 @@
 import type {
   HostedStagingObject,
+  JobExecutionManifest,
   ReserveHostedStagingUploadInput,
   ReserveHostedStagingUploadResponse,
 } from '@life-loop/shared-types'
@@ -11,6 +12,7 @@ import {
   createHostedStagingObjectKey,
   createReservationExpiry,
 } from '../lib/hosted-staging-policy'
+import { verifyJobLeaseToken } from '../lib/job-lease'
 import { insertAuditEvent } from './audit'
 import { getDatabasePool } from './client'
 import { authenticateDeviceCredential } from './device-auth'
@@ -24,6 +26,23 @@ type HostedStagingObjectRow = Omit<HostedStagingObject, 'sizeBytes' | 'uploadedB
 type QuotaRow = {
   pendingBytes: string
   pendingObjectCount: number
+}
+
+type HostedStagingSourceFetch = {
+  checksumSha256: string
+  contentType?: string
+  objectKey: string
+  sizeBytes: number
+}
+
+type HostedStagingJobLeaseRow = {
+  id: string
+  libraryId: string
+  claimedByDeviceId: string | null
+  leaseExpiresAt: string | null
+  leaseTokenHash: string | null
+  status: string
+  execution: JobExecutionManifest | null
 }
 
 export async function reserveHostedStagingUpload(
@@ -324,6 +343,138 @@ export async function listHostedStagingObjects(authorizationToken: string, libra
   }
 }
 
+export async function authorizeHostedStagingSourceFetch(
+  authorizationToken: string,
+  input: { jobId: string; leaseToken: string; stagingObjectId: string },
+  correlationId: string,
+): Promise<HostedStagingSourceFetch> {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+
+  try {
+    await client.query('begin')
+    const device = await authenticateDeviceCredential(client, authorizationToken)
+
+    if (device.status === 'revoked') {
+      throw new Error('Device has been revoked.')
+    }
+
+    if (device.status === 'paused') {
+      throw new Error('Device is paused.')
+    }
+
+    if (device.platform === 'ios') {
+      throw new Error('Hosted staging archive fetch requires a desktop device credential.')
+    }
+
+    const job = await findHostedStagingFetchJob(client, input.jobId)
+
+    if (!job) {
+      throw new Error('Job not found.')
+    }
+
+    if (job.libraryId !== device.libraryId) {
+      throw new Error('Authenticated device does not belong to the job library.')
+    }
+
+    if (job.status !== 'running') {
+      throw new Error(`Job ${job.id} is not running and cannot fetch a hosted-staging source.`)
+    }
+
+    if (job.claimedByDeviceId !== device.id) {
+      throw new Error('Job claim is owned by a different device.')
+    }
+
+    if (!verifyJobLeaseToken(input.leaseToken, job.leaseTokenHash)) {
+      throw new Error('Job lease token is invalid.')
+    }
+
+    if (!job.leaseExpiresAt || Date.parse(job.leaseExpiresAt) <= Date.now()) {
+      throw new Error('Job lease has expired and must be reclaimed.')
+    }
+
+    const executionSource = job.execution?.source
+    if (
+      job.execution?.operation !== 'archive-placement' ||
+      executionSource?.kind !== 'hosted-staging'
+    ) {
+      throw new Error('Job execution manifest does not reference a hosted-staging archive source.')
+    }
+
+    if (executionSource.stagingObjectId !== input.stagingObjectId) {
+      throw new Error('Hosted staging source does not match the claimed job execution manifest.')
+    }
+
+    const stagingObject = await findStagingObjectForLibrary(
+      client,
+      input.stagingObjectId,
+      device.libraryId,
+      true,
+    )
+
+    if (!stagingObject) {
+      throw new Error('Hosted staging object not found.')
+    }
+
+    if (stagingObject.status !== 'staged' && stagingObject.status !== 'archiving') {
+      throw new Error('Hosted staging object is not ready for archive fetch.')
+    }
+
+    if (Date.parse(stagingObject.expiresAt) <= Date.now()) {
+      throw new Error('Hosted staging object has expired.')
+    }
+
+    if (stagingObject.checksumSha256 !== job.execution.checksumSha256) {
+      throw new Error('Hosted staging checksum does not match the job execution manifest.')
+    }
+
+    const sizeBytes = Number(stagingObject.sizeBytes)
+    if (job.execution.sizeBytes !== undefined && sizeBytes !== job.execution.sizeBytes) {
+      throw new Error('Hosted staging size does not match the job execution manifest.')
+    }
+
+    if (stagingObject.status === 'staged') {
+      await client.query(
+        `
+          update hosted_staging_objects
+          set
+            status = 'archiving',
+            updated_at = now()
+          where id = $1::uuid
+        `,
+        [stagingObject.id],
+      )
+    }
+
+    await insertAuditEvent(client, {
+      actorId: device.id,
+      actorType: 'device',
+      correlationId,
+      eventType: 'hosted_staging.archive_fetch_authorized',
+      libraryId: device.libraryId,
+      payload: {
+        deviceId: device.id,
+        jobId: job.id,
+        stagingObjectId: stagingObject.id,
+      },
+    })
+
+    await client.query('commit')
+
+    return {
+      checksumSha256: stagingObject.checksumSha256,
+      ...(stagingObject.contentType ? { contentType: stagingObject.contentType } : {}),
+      objectKey: stagingObject.objectKey,
+      sizeBytes,
+    }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 const hostedStagingObjectSelectSql = `
   hso.id::text,
   hso.library_id::text as "libraryId",
@@ -398,6 +549,50 @@ async function findStagingObjectForDevice(
       limit 1
     `,
     [stagingObjectId, deviceId],
+  )
+
+  return result.rows[0]
+}
+
+async function findStagingObjectForLibrary(
+  client: PoolClient,
+  stagingObjectId: string,
+  libraryId: string,
+  forUpdate: boolean,
+) {
+  const result = await client.query<HostedStagingObjectRow>(
+    `
+      select
+        ${hostedStagingObjectSelectSql}
+      from hosted_staging_objects hso
+      where hso.id = $1::uuid
+        and hso.library_id = $2::uuid
+      ${forUpdate ? 'for update' : ''}
+      limit 1
+    `,
+    [stagingObjectId, libraryId],
+  )
+
+  return result.rows[0]
+}
+
+async function findHostedStagingFetchJob(client: PoolClient, jobId: string) {
+  const result = await client.query<HostedStagingJobLeaseRow>(
+    `
+      select
+        id::text,
+        library_id::text as "libraryId",
+        claimed_by_device_id::text as "claimedByDeviceId",
+        status,
+        payload->'execution' as "execution",
+        lease_token_hash as "leaseTokenHash",
+        to_char(lease_expires_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "leaseExpiresAt"
+      from job_runs
+      where id = $1::uuid
+      for update
+      limit 1
+    `,
+    [jobId],
   )
 
   return result.rows[0]

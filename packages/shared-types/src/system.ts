@@ -371,6 +371,7 @@ export interface CreateJobInput {
     sampleSize?: number
     notes?: string
   }
+  execution?: JobExecutionManifest
   requestedBy?: OwnerIdentityInput
 }
 

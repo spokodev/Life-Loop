@@ -186,6 +186,7 @@ export async function createJobRecord(
       ...(input.metadata?.scopeSummary ? { scopeSummary: input.metadata.scopeSummary } : {}),
       ...(input.metadata?.notes ? { notes: input.metadata.notes } : {}),
       ...(restoreDrillId ? { restoreDrillId } : {}),
+      ...(input.execution ? { execution: input.execution } : {}),
     }
 
     const jobResult = await client.query<JobRow>(

@@ -1,8 +1,12 @@
+import { createReadStream } from 'node:fs'
+import { access } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { idempotencyKeyHeader, parseApiEnv } from '@life-loop/config'
 import { jobKinds, jobStatuses } from '@life-loop/shared-types'
 import { type Context, Hono } from 'hono'
 import { type ZodTypeAny, z } from 'zod'
 
+import { authorizeHostedStagingSourceFetch } from '../db/hosted-staging'
 import {
   claimNextJobForDevice,
   completeClaimedJob,
@@ -12,6 +16,7 @@ import {
   transitionJobRecord,
 } from '../db/jobs'
 import { parseBearerToken } from '../lib/bearer-token'
+import { resolveHostedStagingObjectPath } from '../lib/hosted-staging-store'
 import { problemJson } from '../lib/problem'
 import { resolveUserActor, UserAuthError } from '../lib/user-auth'
 
@@ -27,6 +32,36 @@ const actorSchema = z.object({
   email: z.string().email(),
   displayName: z.string().trim().min(1).max(120).optional(),
   clerkUserId: z.string().trim().min(1).max(191).optional(),
+})
+
+const executionSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('agent-local-staging'),
+    localSourceId: z.string().trim().min(1).max(191),
+    stagingObjectId: z.string().uuid().optional(),
+  }),
+  z.object({
+    kind: z.literal('hosted-staging'),
+    localSourceId: z.string().trim().min(1).max(191).optional(),
+    stagingObjectId: z.string().uuid(),
+  }),
+])
+
+const executionManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operation: z.enum(['archive-placement', 'placement-verification']),
+  storageTargetId: z.string().trim().min(1).max(191),
+  provider: z.string().trim().min(1).max(120),
+  relativePath: z.string().trim().min(1).max(1024),
+  blobId: z.string().uuid().optional(),
+  assetId: z.string().uuid().optional(),
+  checksumSha256: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{64}$/i)
+    .transform((checksum) => checksum.toLowerCase()),
+  sizeBytes: z.coerce.number().int().min(0).optional(),
+  source: executionSourceSchema.optional(),
 })
 
 const createJobSchema = z.object({
@@ -46,6 +81,7 @@ const createJobSchema = z.object({
       notes: z.string().trim().min(1).max(280).optional(),
     })
     .optional(),
+  execution: executionManifestSchema.optional(),
   requestedBy: actorSchema.optional(),
 })
 
@@ -84,6 +120,15 @@ const listJobsQuerySchema = z.object({
 
 const jobIdParamSchema = z.object({
   jobId: z.string().uuid(),
+})
+
+const hostedStagingSourceParamSchema = z.object({
+  jobId: z.string().uuid(),
+  stagingObjectId: z.string().uuid(),
+})
+
+const hostedStagingSourceFetchSchema = z.object({
+  leaseToken: z.string().trim().min(16).max(512),
 })
 
 export const jobsRoutes = new Hono<{
@@ -261,6 +306,75 @@ jobsRoutes.post('/jobs/:jobId/claims/complete', async (context) => {
     )
 
     return context.json(response)
+  } catch (error) {
+    return mapJobsError(context, error)
+  }
+})
+
+jobsRoutes.post('/jobs/:jobId/sources/hosted-staging/:stagingObjectId', async (context) => {
+  const parsedParams = hostedStagingSourceParamSchema.safeParse({
+    jobId: context.req.param('jobId'),
+    stagingObjectId: context.req.param('stagingObjectId'),
+  })
+
+  if (!parsedParams.success) {
+    return problemJson(context, {
+      title: 'Invalid hosted staging source request',
+      status: 422,
+      detail:
+        parsedParams.error.issues[0]?.message ?? 'The hosted staging source request is invalid.',
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  const bearerToken = getBearerToken(context)
+
+  if (!bearerToken) {
+    return problemJson(context, {
+      title: 'Authorization required',
+      status: 401,
+      detail: 'Hosted staging source fetch requests must include a Bearer device credential.',
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  const parsedBody = await parseBody(context, hostedStagingSourceFetchSchema)
+
+  if (!parsedBody.success) {
+    return parsedBody.response
+  }
+
+  try {
+    const source = await authorizeHostedStagingSourceFetch(
+      bearerToken,
+      {
+        jobId: parsedParams.data.jobId,
+        leaseToken: parsedBody.data.leaseToken,
+        stagingObjectId: parsedParams.data.stagingObjectId,
+      },
+      context.get('correlationId'),
+    )
+    const objectPath = resolveHostedStagingObjectPath(env.HOSTED_STAGING_ROOT, source.objectKey)
+    try {
+      await access(objectPath)
+    } catch {
+      throw new Error('Hosted staging object file is not available.')
+    }
+
+    return new Response(
+      Readable.toWeb(createReadStream(objectPath)) as ReadableStream<Uint8Array>,
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Disposition': 'attachment; filename="life-loop-staged-object"',
+          'Content-Length': String(source.sizeBytes),
+          'Content-Type': source.contentType ?? 'application/octet-stream',
+          'X-Life-Loop-Checksum-Sha256': source.checksumSha256,
+          'X-Content-Type-Options': 'nosniff',
+        },
+        status: 200,
+      },
+    )
   } catch (error) {
     return mapJobsError(context, error)
   }
@@ -463,6 +577,7 @@ function mapJobsError(context: JobsContext, error: unknown) {
     (error.message.includes('Device has been revoked') ||
       error.message.includes('Device is paused') ||
       error.message.includes('Device credential is not active') ||
+      error.message.includes('desktop device credential') ||
       error.message.includes('Authenticated device does not belong') ||
       error.message.includes('claim is owned by a different device'))
   ) {
@@ -477,6 +592,15 @@ function mapJobsError(context: JobsContext, error: unknown) {
   if (error instanceof Error && error.message === 'Job not found.') {
     return problemJson(context, {
       title: 'Job not found',
+      status: 404,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  if (error instanceof Error && error.message === 'Hosted staging object not found.') {
+    return problemJson(context, {
+      title: 'Hosted staging object not found',
       status: 404,
       detail: error.message,
       correlationId: context.get('correlationId'),
@@ -504,6 +628,7 @@ function mapJobsError(context: JobsContext, error: unknown) {
   if (
     error instanceof Error &&
     (error.message.includes('requires') ||
+      error.message.includes('Execution manifest') ||
       error.message.includes('reason is required') ||
       error.message.includes('summary is required'))
   ) {
@@ -518,10 +643,29 @@ function mapJobsError(context: JobsContext, error: unknown) {
   if (
     error instanceof Error &&
     (error.message.includes('not running and cannot be mutated') ||
+      error.message.includes('not running and cannot fetch') ||
       error.message.includes('lease has expired'))
   ) {
     return problemJson(context, {
       title: 'Claim lease conflict',
+      status: 409,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
+  if (
+    error instanceof Error &&
+    (error.message.includes('Hosted staging object is not ready') ||
+      error.message.includes('Hosted staging object has expired') ||
+      error.message.includes('Hosted staging object file is not available') ||
+      error.message.includes('Hosted staging checksum does not match') ||
+      error.message.includes('Hosted staging size does not match') ||
+      error.message.includes('Hosted staging source does not match') ||
+      error.message.includes('does not reference a hosted-staging'))
+  ) {
+    return problemJson(context, {
+      title: 'Hosted staging source unavailable',
       status: 409,
       detail: error.message,
       correlationId: context.get('correlationId'),

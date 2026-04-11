@@ -25,7 +25,7 @@ export async function storeHostedStagingObject(
     throw new Error('Upload request body is required.')
   }
 
-  const destinationPath = hostedStagingObjectPath(input.rootDirectory, input.objectKey)
+  const destinationPath = resolveHostedStagingObjectPath(input.rootDirectory, input.objectKey)
   const temporaryPath = `${destinationPath}.tmp-${process.pid}-${Date.now()}`
   await mkdir(path.dirname(destinationPath), { recursive: true })
 
@@ -70,7 +70,7 @@ export async function storeHostedStagingObject(
   }
 }
 
-function hostedStagingObjectPath(rootDirectory: string, objectKey: string) {
+export function resolveHostedStagingObjectPath(rootDirectory: string, objectKey: string) {
   const normalizedObjectKey = path.posix.normalize(objectKey)
 
   if (

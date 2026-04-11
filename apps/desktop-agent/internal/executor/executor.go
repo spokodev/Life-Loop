@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -26,6 +28,7 @@ const (
 	SafeErrorUnsupportedProvider = "unsupported_provider"
 	SafeErrorDiskUnavailable     = "disk_unavailable"
 	SafeErrorChecksumMismatch    = "checksum_mismatch"
+	SafeErrorHostedStagingFetch  = "hosted_staging_fetch_failed"
 )
 
 type Result struct {
@@ -36,7 +39,12 @@ type Result struct {
 
 type Runner struct {
 	Bindings          bindings.File
+	HostedStaging     HostedStagingFetcher
 	LocalDiskProvider storage.LocalDiskProvider
+}
+
+type HostedStagingFetcher interface {
+	FetchHostedStagingSource(ctx context.Context, claim controlplane.ClaimedJob, stagingObjectID string) (io.ReadCloser, error)
 }
 
 var checksumPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -73,7 +81,7 @@ func (r Runner) Execute(ctx context.Context, claim controlplane.ClaimedJob) Resu
 	case "placement-verification":
 		return r.verifyPlacement(ctx, binding.RootPath, destinationPath, manifest.ChecksumSHA256)
 	case "archive-placement":
-		return r.placeArchive(ctx, binding.RootPath, destinationPath, *manifest)
+		return r.placeArchive(ctx, claim, binding.RootPath, destinationPath, *manifest)
 	default:
 		return blocked(SafeErrorUnsupportedJob, "Job kind is not supported by the MVP desktop executor.")
 	}
@@ -101,7 +109,7 @@ func (r Runner) verifyPlacement(ctx context.Context, rootPath string, destinatio
 	}
 }
 
-func (r Runner) placeArchive(_ context.Context, _ string, _ string, manifest controlplane.JobExecutionManifest) Result {
+func (r Runner) placeArchive(ctx context.Context, claim controlplane.ClaimedJob, rootPath string, destinationPath string, manifest controlplane.JobExecutionManifest) Result {
 	if manifest.Source == nil {
 		return blocked(SafeErrorUnsupportedSource, "Archive placement requires a supported non-path source reference.")
 	}
@@ -110,9 +118,64 @@ func (r Runner) placeArchive(_ context.Context, _ string, _ string, manifest con
 	case "agent-local-staging":
 		return blocked(SafeErrorUnsupportedSource, "Agent-local staging source manifest is not configured yet.")
 	case "hosted-staging":
-		return blocked(SafeErrorUnsupportedSource, "Hosted staging fetch is not implemented yet.")
+		return r.placeHostedStagingArchive(ctx, claim, rootPath, destinationPath, manifest)
 	default:
 		return blocked(SafeErrorUnsupportedSource, "Source kind is not supported by the MVP desktop executor.")
+	}
+}
+
+func (r Runner) placeHostedStagingArchive(ctx context.Context, claim controlplane.ClaimedJob, rootPath string, destinationPath string, manifest controlplane.JobExecutionManifest) Result {
+	if r.HostedStaging == nil || manifest.Source == nil || manifest.Source.StagingObjectID == "" {
+		return blocked(SafeErrorUnsupportedSource, "Hosted staging source is not configured for this archive placement job.")
+	}
+
+	if err := r.LocalDiskProvider.Health(ctx, storage.HealthRequest{RootPath: rootPath}); err != nil {
+		return blocked(SafeErrorDiskUnavailable, "Storage target is unavailable or not a directory.")
+	}
+
+	source, err := r.HostedStaging.FetchHostedStagingSource(ctx, claim, manifest.Source.StagingObjectID)
+	if err != nil {
+		return blocked(SafeErrorHostedStagingFetch, "Hosted staging source could not be fetched from the control plane.")
+	}
+	defer source.Close()
+
+	temporaryFile, err := os.CreateTemp("", "life-loop-hosted-staging-*")
+	if err != nil {
+		return blocked(SafeErrorDiskUnavailable, "Temporary archive source could not be created.")
+	}
+
+	temporaryPath := temporaryFile.Name()
+	defer os.Remove(temporaryPath)
+
+	if _, err := io.Copy(temporaryFile, source); err != nil {
+		_ = temporaryFile.Close()
+		return blocked(SafeErrorHostedStagingFetch, "Hosted staging source could not be copied into a temporary archive source.")
+	}
+
+	if err := temporaryFile.Sync(); err != nil {
+		_ = temporaryFile.Close()
+		return blocked(SafeErrorDiskUnavailable, "Temporary archive source could not be flushed.")
+	}
+
+	if err := temporaryFile.Close(); err != nil {
+		return blocked(SafeErrorDiskUnavailable, "Temporary archive source could not be closed.")
+	}
+
+	if _, err := r.LocalDiskProvider.Put(ctx, storage.PutRequest{
+		SourcePath:       temporaryPath,
+		DestinationPath:  destinationPath,
+		ExpectedChecksum: manifest.ChecksumSHA256,
+	}); err != nil {
+		if errors.Is(err, storage.ErrChecksumMismatch) {
+			return blocked(SafeErrorChecksumMismatch, "Hosted staging source checksum does not match the expected blob checksum.")
+		}
+
+		return blocked(SafeErrorDiskUnavailable, "Hosted staging source could not be placed on the bound storage target.")
+	}
+
+	return Result{
+		Status: StatusSucceeded,
+		Reason: "Hosted staging source was placed and checksum verified on the bound storage target.",
 	}
 }
 

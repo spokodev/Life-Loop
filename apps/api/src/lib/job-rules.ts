@@ -26,7 +26,91 @@ export function validateCreateJobInput(input: CreateJobInput) {
     return 'Device-heartbeat jobs require a device id.'
   }
 
+  if (input.execution) {
+    return validateExecutionManifestForCreate(input)
+  }
+
   return null
+}
+
+function validateExecutionManifestForCreate(input: CreateJobInput) {
+  const manifest = input.execution
+
+  if (!manifest) {
+    return null
+  }
+
+  if (manifest.schemaVersion !== 1) {
+    return 'Execution manifest schema version is unsupported.'
+  }
+
+  if (manifest.operation !== input.kind) {
+    return 'Execution manifest operation must match the job kind.'
+  }
+
+  if (
+    manifest.operation !== 'archive-placement' &&
+    manifest.operation !== 'placement-verification'
+  ) {
+    return 'Execution manifest operation is unsupported.'
+  }
+
+  if (!manifest.storageTargetId.trim()) {
+    return 'Execution manifest requires a storage target id.'
+  }
+
+  if (!manifest.provider.trim()) {
+    return 'Execution manifest requires a provider.'
+  }
+
+  if (!manifest.relativePath.trim()) {
+    return 'Execution manifest requires a relative path.'
+  }
+
+  if (!isSafeRelativePath(manifest.relativePath)) {
+    return 'Execution manifest relative path must stay within the storage target root.'
+  }
+
+  if (!/^[a-f0-9]{64}$/.test(manifest.checksumSha256)) {
+    return 'Execution manifest checksum must be a lowercase sha256 hex digest.'
+  }
+
+  if (
+    manifest.sizeBytes !== undefined &&
+    (!Number.isInteger(manifest.sizeBytes) || manifest.sizeBytes < 0)
+  ) {
+    return 'Execution manifest sizeBytes must be a non-negative integer.'
+  }
+
+  if (manifest.operation === 'archive-placement' && !manifest.source) {
+    return 'Archive-placement execution manifests require a source reference.'
+  }
+
+  if (manifest.source?.kind === 'hosted-staging' && !manifest.source.stagingObjectId?.trim()) {
+    return 'Hosted-staging execution manifests require a staging object id.'
+  }
+
+  if (manifest.source?.kind === 'agent-local-staging' && !manifest.source.localSourceId?.trim()) {
+    return 'Agent-local-staging execution manifests require a local source id.'
+  }
+
+  return null
+}
+
+function isSafeRelativePath(relativePath: string) {
+  if (
+    relativePath.startsWith('/') ||
+    relativePath.startsWith('\\') ||
+    relativePath.includes(':') ||
+    relativePath.trim() !== relativePath
+  ) {
+    return false
+  }
+
+  return relativePath
+    .replaceAll('\\', '/')
+    .split('/')
+    .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..')
 }
 
 export function validateJobTransition(job: JobRun, input: TransitionJobInput) {

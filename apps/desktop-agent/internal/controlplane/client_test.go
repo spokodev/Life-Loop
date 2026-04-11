@@ -242,3 +242,93 @@ func TestCompleteJobClaimPostsLeaseAndSafeErrorClass(t *testing.T) {
 		t.Fatalf("unexpected response: %#v", response)
 	}
 }
+
+func TestFetchHostedStagingSourcePostsLeaseAndReturnsStream(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", request.Method)
+		}
+
+		if request.URL.Path != "/v1/jobs/job-1/sources/hosted-staging/staging-1" {
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+
+		if got := request.Header.Get("Authorization"); got != "Bearer credential-1" {
+			t.Fatalf("unexpected authorization header: %s", got)
+		}
+
+		if got := request.Header.Get("Accept"); got != "application/octet-stream" {
+			t.Fatalf("unexpected accept header: %s", got)
+		}
+
+		body := FetchHostedStagingSourceRequest{}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+
+		if body.LeaseToken != "lease-token" {
+			t.Fatalf("unexpected lease token: %q", body.LeaseToken)
+		}
+
+		response.Header().Set("Content-Type", "application/octet-stream")
+		if _, err := response.Write([]byte("hosted staging bytes")); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+	}
+
+	stream, err := client.FetchHostedStagingSource(context.Background(), "credential-1", "job-1", "staging-1", "lease-token")
+	if err != nil {
+		t.Fatalf("FetchHostedStagingSource returned error: %v", err)
+	}
+	defer stream.Close()
+
+	body, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("read hosted staging stream: %v", err)
+	}
+
+	if string(body) != "hosted staging bytes" {
+		t.Fatalf("unexpected stream body: %q", string(body))
+	}
+}
+
+func TestFetchHostedStagingSourceReturnsProblemDetail(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(http.StatusConflict)
+		if err := json.NewEncoder(response).Encode(problemResponse{
+			Title:  "Hosted staging source unavailable",
+			Detail: "Hosted staging object has expired.",
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+	}
+
+	stream, err := client.FetchHostedStagingSource(context.Background(), "credential-1", "job-1", "staging-1", "lease-token")
+	if err == nil {
+		if stream != nil {
+			stream.Close()
+		}
+		t.Fatal("expected FetchHostedStagingSource to return an error")
+	}
+
+	if got := err.Error(); got != "control plane returned status 409: Hosted staging object has expired." {
+		t.Fatalf("unexpected error: %s", got)
+	}
+}

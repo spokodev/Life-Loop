@@ -3,7 +3,11 @@ import test from 'node:test'
 
 import type { JobRun } from '@life-loop/shared-types'
 
-import { mapRestoreDrillFromStatus, validateJobTransition } from './job-rules'
+import {
+  mapRestoreDrillFromStatus,
+  validateCreateJobInput,
+  validateJobTransition,
+} from './job-rules'
 
 const baseJob: JobRun = {
   id: 'job-1',
@@ -74,4 +78,86 @@ test('mapRestoreDrillFromStatus maps completed_with_warnings to passed with note
   assert.equal(mapped.status, 'passed')
   assert.equal(mapped.notes, 'One source path required manual remapping.')
   assert.ok(mapped.completedAt)
+})
+
+test('validateCreateJobInput accepts a safe hosted-staging archive execution manifest', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'archive-placement',
+    execution: {
+      schemaVersion: 1,
+      operation: 'archive-placement',
+      storageTargetId: 'target-1',
+      provider: 'local-disk',
+      relativePath: '2026/04/original.bin',
+      checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sizeBytes: 128,
+      source: {
+        kind: 'hosted-staging',
+        stagingObjectId: '13bcfd33-d477-4c52-943e-25ef423fbf67',
+      },
+    },
+  })
+
+  assert.equal(validationMessage, null)
+})
+
+test('validateCreateJobInput rejects archive execution without a source', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'archive-placement',
+    execution: {
+      schemaVersion: 1,
+      operation: 'archive-placement',
+      storageTargetId: 'target-1',
+      provider: 'local-disk',
+      relativePath: '2026/04/original.bin',
+      checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+  })
+
+  assert.equal(
+    validationMessage,
+    'Archive-placement execution manifests require a source reference.',
+  )
+})
+
+test('validateCreateJobInput rejects unsafe execution relative paths', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'placement-verification',
+    execution: {
+      schemaVersion: 1,
+      operation: 'placement-verification',
+      storageTargetId: 'target-1',
+      provider: 'local-disk',
+      relativePath: '../escape.bin',
+      checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+  })
+
+  assert.equal(
+    validationMessage,
+    'Execution manifest relative path must stay within the storage target root.',
+  )
+})
+
+test('validateCreateJobInput rejects hosted-staging source without staging object id', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'archive-placement',
+    execution: {
+      schemaVersion: 1,
+      operation: 'archive-placement',
+      storageTargetId: 'target-1',
+      provider: 'local-disk',
+      relativePath: '2026/04/original.bin',
+      checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      source: {
+        kind: 'hosted-staging',
+      },
+    },
+  })
+
+  assert.equal(validationMessage, 'Hosted-staging execution manifests require a staging object id.')
 })

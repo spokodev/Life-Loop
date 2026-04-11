@@ -1,9 +1,12 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -174,6 +177,104 @@ func TestExecuteBlocksArchivePlacementWithoutSupportedSource(t *testing.T) {
 	assertBlocked(t, result, SafeErrorUnsupportedSource)
 }
 
+func TestExecutePlacesHostedStagingArchive(t *testing.T) {
+	t.Parallel()
+
+	rootPath := t.TempDir()
+	content := []byte("hosted staging archive bytes")
+	runner := Runner{
+		Bindings: bindings.File{Bindings: []bindings.StorageTargetBinding{
+			{
+				StorageTargetID: "target-1",
+				Provider:        "local-disk",
+				RootPath:        rootPath,
+			},
+		}},
+		HostedStaging: fakeHostedStagingFetcher{body: content},
+	}
+	claim := archivePlacementClaim(t, "target-1", "local-disk", "asset/original.bin", hashBytes(content), "staging-1")
+
+	result := runner.Execute(context.Background(), claim)
+
+	if result.Status != StatusSucceeded {
+		t.Fatalf("expected hosted staging archive placement to succeed, got %#v", result)
+	}
+
+	destinationBytes, err := os.ReadFile(filepath.Join(rootPath, "asset", "original.bin"))
+	if err != nil {
+		t.Fatalf("read destination: %v", err)
+	}
+
+	if !bytes.Equal(destinationBytes, content) {
+		t.Fatalf("unexpected destination bytes: %q", string(destinationBytes))
+	}
+}
+
+func TestExecuteBlocksHostedStagingChecksumMismatch(t *testing.T) {
+	t.Parallel()
+
+	rootPath := t.TempDir()
+	runner := Runner{
+		Bindings: bindings.File{Bindings: []bindings.StorageTargetBinding{
+			{
+				StorageTargetID: "target-1",
+				Provider:        "local-disk",
+				RootPath:        rootPath,
+			},
+		}},
+		HostedStaging: fakeHostedStagingFetcher{body: []byte("unexpected bytes")},
+	}
+	claim := archivePlacementClaim(t, "target-1", "local-disk", "asset/original.bin", hashBytes([]byte("expected bytes")), "staging-1")
+
+	result := runner.Execute(context.Background(), claim)
+
+	assertBlocked(t, result, SafeErrorChecksumMismatch)
+	if _, err := os.Stat(filepath.Join(rootPath, "asset", "original.bin")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("destination should not exist after checksum mismatch, got err=%v", err)
+	}
+}
+
+func TestExecuteBlocksHostedStagingFetchError(t *testing.T) {
+	t.Parallel()
+
+	rootPath := t.TempDir()
+	runner := Runner{
+		Bindings: bindings.File{Bindings: []bindings.StorageTargetBinding{
+			{
+				StorageTargetID: "target-1",
+				Provider:        "local-disk",
+				RootPath:        rootPath,
+			},
+		}},
+		HostedStaging: fakeHostedStagingFetcher{err: errors.New("upstream unavailable")},
+	}
+	claim := archivePlacementClaim(t, "target-1", "local-disk", "asset/original.bin", hashBytes([]byte("expected bytes")), "staging-1")
+
+	result := runner.Execute(context.Background(), claim)
+
+	assertBlocked(t, result, SafeErrorHostedStagingFetch)
+}
+
+func TestExecuteBlocksHostedStagingWithoutFetcher(t *testing.T) {
+	t.Parallel()
+
+	rootPath := t.TempDir()
+	runner := Runner{
+		Bindings: bindings.File{Bindings: []bindings.StorageTargetBinding{
+			{
+				StorageTargetID: "target-1",
+				Provider:        "local-disk",
+				RootPath:        rootPath,
+			},
+		}},
+	}
+	claim := archivePlacementClaim(t, "target-1", "local-disk", "asset/original.bin", hashBytes([]byte("expected bytes")), "staging-1")
+
+	result := runner.Execute(context.Background(), claim)
+
+	assertBlocked(t, result, SafeErrorUnsupportedSource)
+}
+
 func TestExecuteBlocksUnsafeRelativePath(t *testing.T) {
 	t.Parallel()
 
@@ -211,6 +312,33 @@ func verificationClaim(t *testing.T, targetID string, provider string, relativeP
 	}
 }
 
+func archivePlacementClaim(t *testing.T, targetID string, provider string, relativePath string, checksum string, stagingObjectID string) controlplane.ClaimedJob {
+	t.Helper()
+
+	return controlplane.ClaimedJob{
+		Job: controlplane.Job{
+			ID:   "job-1",
+			Kind: "archive-placement",
+		},
+		Lease: controlplane.JobLease{
+			LeaseToken:     "lease-token",
+			LeaseExpiresAt: "2026-01-01T00:05:00Z",
+		},
+		Execution: &controlplane.JobExecutionManifest{
+			SchemaVersion:   1,
+			Operation:       "archive-placement",
+			StorageTargetID: targetID,
+			Provider:        provider,
+			RelativePath:    relativePath,
+			ChecksumSHA256:  checksum,
+			Source: &controlplane.JobExecutionSource{
+				Kind:            "hosted-staging",
+				StagingObjectID: stagingObjectID,
+			},
+		},
+	}
+}
+
 func assertBlocked(t *testing.T, result Result, safeErrorClass string) {
 	t.Helper()
 
@@ -226,4 +354,17 @@ func assertBlocked(t *testing.T, result Result, safeErrorClass string) {
 func hashBytes(input []byte) string {
 	sum := sha256.Sum256(input)
 	return hex.EncodeToString(sum[:])
+}
+
+type fakeHostedStagingFetcher struct {
+	body []byte
+	err  error
+}
+
+func (f fakeHostedStagingFetcher) FetchHostedStagingSource(_ context.Context, _ controlplane.ClaimedJob, _ string) (io.ReadCloser, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	return io.NopCloser(bytes.NewReader(f.body)), nil
 }

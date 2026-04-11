@@ -297,6 +297,7 @@ func (s Service) pollAndExecuteOneJob(ctx context.Context, storedCredential cred
 
 	runner := executor.Runner{
 		Bindings:          bindingsFile,
+		HostedStaging:     controlplane.HostedStagingFetcher{Client: s.client, Credential: storedCredential.Credential},
 		LocalDiskProvider: storage.LocalDiskProvider{},
 	}
 	result := runner.Execute(ctx, claim)

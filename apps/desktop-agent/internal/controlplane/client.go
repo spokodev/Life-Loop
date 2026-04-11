@@ -137,6 +137,15 @@ type CompleteJobClaimResponse struct {
 	Job Job `json:"job"`
 }
 
+type FetchHostedStagingSourceRequest struct {
+	LeaseToken string `json:"leaseToken"`
+}
+
+type HostedStagingFetcher struct {
+	Client     *Client
+	Credential string
+}
+
 type problemResponse struct {
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
@@ -220,6 +229,57 @@ func (c *Client) CompleteJobClaim(ctx context.Context, credential string, jobID 
 	return responseBody, nil
 }
 
+func (c *Client) FetchHostedStagingSource(ctx context.Context, credential string, jobID string, stagingObjectID string, leaseToken string) (io.ReadCloser, error) {
+	payload, err := json.Marshal(FetchHostedStagingSourceRequest{LeaseToken: leaseToken})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/v1/jobs/"+url.PathEscape(jobID)+"/sources/hosted-staging/"+url.PathEscape(stagingObjectID),
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	request.Header.Set("Accept", "application/octet-stream")
+	request.Header.Set("Authorization", "Bearer "+credential)
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := c.streamingHTTPClient().Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+
+	if response.StatusCode >= 400 {
+		defer response.Body.Close()
+		problem := problemResponse{}
+		if decodeErr := json.NewDecoder(response.Body).Decode(&problem); decodeErr != nil {
+			return nil, fmt.Errorf("control plane returned status %d", response.StatusCode)
+		}
+
+		detail := problem.Detail
+		if detail == "" {
+			detail = problem.Title
+		}
+
+		return nil, fmt.Errorf("control plane returned status %d: %s", response.StatusCode, detail)
+	}
+
+	return response.Body, nil
+}
+
+func (f HostedStagingFetcher) FetchHostedStagingSource(ctx context.Context, claim ClaimedJob, stagingObjectID string) (io.ReadCloser, error) {
+	if f.Client == nil {
+		return nil, fmt.Errorf("control plane client is not configured")
+	}
+
+	return f.Client.FetchHostedStagingSource(ctx, f.Credential, claim.Job.ID, stagingObjectID, claim.Lease.LeaseToken)
+}
+
 func (c *Client) doJSON(ctx context.Context, method string, path string, body any, bearerToken string, target any) error {
 	var requestBody io.Reader = http.NoBody
 	if body != nil {
@@ -270,4 +330,16 @@ func (c *Client) doJSON(ctx context.Context, method string, path string, body an
 	}
 
 	return nil
+}
+
+func (c *Client) streamingHTTPClient() *http.Client {
+	if c.httpClient.Timeout == 0 {
+		return c.httpClient
+	}
+
+	return &http.Client{
+		Transport:     c.httpClient.Transport,
+		CheckRedirect: c.httpClient.CheckRedirect,
+		Jar:           c.httpClient.Jar,
+	}
 }
