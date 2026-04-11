@@ -38,7 +38,7 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Reduced motion: design-system rules and web patterns exist; iOS foundation has minimal motion and still needs app-level accessibility QA.
 
 ## Next Execution Order
-1. Implement hosted-staging source execution for `archive-placement` under ADR-019 and ADR-021, without exposing raw paths and without hidden retention automation.
+1. Implement hosted-staging source execution for `archive-placement` under ADR-019, ADR-021, and ADR-022, without exposing raw paths and without hidden retention automation.
 2. Add API/device route support for safe staged-object fetch or transfer manifests scoped to the authenticated device/library.
 3. Extend desktop agent executor tests for hosted-staging success, checksum mismatch, missing staging object, expired staging object, and retry-safe rerun.
 4. Implement restore-drill executor semantics after archive placement can produce verified archive evidence.
