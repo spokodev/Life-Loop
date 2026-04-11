@@ -9,6 +9,7 @@ import (
 	"github.com/life-loop/desktop-agent/internal/config"
 	"github.com/life-loop/desktop-agent/internal/controlplane"
 	"github.com/life-loop/desktop-agent/internal/credentials"
+	"github.com/life-loop/desktop-agent/internal/executor"
 	"github.com/life-loop/desktop-agent/internal/health"
 	"github.com/life-loop/desktop-agent/internal/logging"
 	"github.com/life-loop/desktop-agent/internal/storage"
@@ -55,6 +56,7 @@ func (s Service) Run(ctx context.Context) error {
 	if err := s.sendHeartbeat(ctx, storedCredential.Credential); err != nil {
 		return err
 	}
+	s.pollAndExecuteOneJob(ctx, storedCredential)
 
 	ticker := time.NewTicker(s.config.HeartbeatInterval)
 	defer ticker.Stop()
@@ -70,6 +72,7 @@ func (s Service) Run(ctx context.Context) error {
 					"error": err.Error(),
 				})
 			}
+			s.pollAndExecuteOneJob(ctx, storedCredential)
 		}
 	}
 }
@@ -251,6 +254,107 @@ func (s Service) sendHeartbeat(ctx context.Context, credential string) error {
 	})
 
 	return nil
+}
+
+func (s Service) pollAndExecuteOneJob(ctx context.Context, storedCredential credentials.StoredCredential) {
+	if storedCredential.Credential == "" {
+		s.logger.Info("agent.job_poll_skipped", map[string]any{
+			"reason": "Device credential is unavailable.",
+		})
+		return
+	}
+
+	claimResponse, err := s.client.ClaimJob(ctx, storedCredential.Credential, controlplane.ClaimJobRequest{
+		Kinds:        []string{"archive-placement", "placement-verification"},
+		LeaseSeconds: 300,
+	})
+	if err != nil {
+		s.logger.Error("agent.job_claim_failed", map[string]any{
+			"error": safeControlPlaneError(err),
+		})
+		return
+	}
+
+	if claimResponse.Claim == nil {
+		s.logger.Info("agent.job_poll_idle", map[string]any{
+			"recoveredExpiredCount": claimResponse.RecoveredExpiredCount,
+		})
+		return
+	}
+
+	claim := *claimResponse.Claim
+	s.logger.Info("agent.job_claimed", map[string]any{
+		"jobId":          claim.Job.ID,
+		"kind":           claim.Job.Kind,
+		"leaseExpiresAt": claim.Lease.LeaseExpiresAt,
+	})
+
+	bindingsFile, err := bindings.Load(s.config.StorageBindingsPath)
+	if err != nil {
+		s.completeJobAsBlocked(ctx, storedCredential.Credential, claim, executor.SafeErrorMissingBinding, "Storage bindings could not be loaded.")
+		return
+	}
+
+	runner := executor.Runner{
+		Bindings:          bindingsFile,
+		LocalDiskProvider: storage.LocalDiskProvider{},
+	}
+	result := runner.Execute(ctx, claim)
+
+	if _, err := s.client.HeartbeatJobClaim(ctx, storedCredential.Credential, claim.Job.ID, controlplane.HeartbeatJobClaimRequest{
+		LeaseToken:   claim.Lease.LeaseToken,
+		LeaseSeconds: 300,
+	}); err != nil {
+		s.logger.Error("agent.job_lease_heartbeat_failed", map[string]any{
+			"jobId": claim.Job.ID,
+			"error": safeControlPlaneError(err),
+		})
+		return
+	}
+
+	if _, err := s.client.CompleteJobClaim(ctx, storedCredential.Credential, claim.Job.ID, controlplane.CompleteJobClaimRequest{
+		LeaseToken:     claim.Lease.LeaseToken,
+		Status:         result.Status,
+		Reason:         result.Reason,
+		SafeErrorClass: result.SafeErrorClass,
+	}); err != nil {
+		s.logger.Error("agent.job_complete_failed", map[string]any{
+			"jobId":          claim.Job.ID,
+			"status":         result.Status,
+			"safeErrorClass": result.SafeErrorClass,
+			"error":          safeControlPlaneError(err),
+		})
+		return
+	}
+
+	s.logger.Info("agent.job_completed", map[string]any{
+		"jobId":          claim.Job.ID,
+		"status":         result.Status,
+		"safeErrorClass": result.SafeErrorClass,
+	})
+}
+
+func (s Service) completeJobAsBlocked(ctx context.Context, credential string, claim controlplane.ClaimedJob, safeErrorClass string, reason string) {
+	if _, err := s.client.CompleteJobClaim(ctx, credential, claim.Job.ID, controlplane.CompleteJobClaimRequest{
+		LeaseToken:     claim.Lease.LeaseToken,
+		Status:         executor.StatusBlocked,
+		Reason:         reason,
+		SafeErrorClass: safeErrorClass,
+	}); err != nil {
+		s.logger.Error("agent.job_block_failed", map[string]any{
+			"jobId":          claim.Job.ID,
+			"safeErrorClass": safeErrorClass,
+			"error":          safeControlPlaneError(err),
+		})
+	}
+}
+
+func safeControlPlaneError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	return err.Error()
 }
 
 func firstNonEmpty(primary string, fallback string) string {

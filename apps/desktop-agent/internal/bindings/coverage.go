@@ -31,7 +31,7 @@ func Coverage(bindingsFile File, targets []TargetReference) CoverageReport {
 			continue
 		}
 
-		if normalizeProvider(binding.Provider) != normalizeProvider(target.Provider) {
+		if NormalizeProvider(binding.Provider) != NormalizeProvider(target.Provider) {
 			report.ProviderMismatches = append(report.ProviderMismatches, ProviderMismatch{
 				Target:  target,
 				Binding: binding,
@@ -51,7 +51,7 @@ func Coverage(bindingsFile File, targets []TargetReference) CoverageReport {
 	return report
 }
 
-func normalizeProvider(provider string) string {
+func NormalizeProvider(provider string) string {
 	switch provider {
 	case "LocalDiskProvider":
 		return "local-disk"

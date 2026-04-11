@@ -62,6 +62,81 @@ type ListStorageTargetsResponse struct {
 	StorageTargets []StorageTarget `json:"storageTargets"`
 }
 
+type Job struct {
+	ID                string  `json:"id"`
+	LibraryID         string  `json:"libraryId,omitempty"`
+	AssetID           string  `json:"assetId,omitempty"`
+	DeviceID          string  `json:"deviceId,omitempty"`
+	ClaimedByDeviceID string  `json:"claimedByDeviceId,omitempty"`
+	Kind              string  `json:"kind"`
+	Status            string  `json:"status"`
+	CorrelationID     string  `json:"correlationId"`
+	AttemptCount      int     `json:"attemptCount"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedAt         string  `json:"updatedAt"`
+	LeaseExpiresAt    *string `json:"leaseExpiresAt,omitempty"`
+	LastHeartbeatAt   *string `json:"lastHeartbeatAt,omitempty"`
+	StartedAt         *string `json:"startedAt,omitempty"`
+	CompletedAt       *string `json:"completedAt,omitempty"`
+	BlockingReason    string  `json:"blockingReason,omitempty"`
+}
+
+type JobLease struct {
+	LeaseToken     string `json:"leaseToken"`
+	LeaseExpiresAt string `json:"leaseExpiresAt"`
+}
+
+type JobExecutionSource struct {
+	Kind            string `json:"kind"`
+	LocalSourceID   string `json:"localSourceId,omitempty"`
+	StagingObjectID string `json:"stagingObjectId,omitempty"`
+}
+
+type JobExecutionManifest struct {
+	SchemaVersion   int                 `json:"schemaVersion"`
+	Operation       string              `json:"operation"`
+	StorageTargetID string              `json:"storageTargetId"`
+	Provider        string              `json:"provider"`
+	RelativePath    string              `json:"relativePath"`
+	BlobID          string              `json:"blobId,omitempty"`
+	AssetID         string              `json:"assetId,omitempty"`
+	ChecksumSHA256  string              `json:"checksumSha256"`
+	SizeBytes       int64               `json:"sizeBytes,omitempty"`
+	Source          *JobExecutionSource `json:"source,omitempty"`
+}
+
+type ClaimJobRequest struct {
+	Kinds        []string `json:"kinds,omitempty"`
+	LeaseSeconds int      `json:"leaseSeconds,omitempty"`
+}
+
+type ClaimedJob struct {
+	Job       Job                   `json:"job"`
+	Lease     JobLease              `json:"lease"`
+	Execution *JobExecutionManifest `json:"execution,omitempty"`
+}
+
+type ClaimJobResponse struct {
+	Claim                 *ClaimedJob `json:"claim,omitempty"`
+	RecoveredExpiredCount int         `json:"recoveredExpiredCount"`
+}
+
+type HeartbeatJobClaimRequest struct {
+	LeaseToken   string `json:"leaseToken"`
+	LeaseSeconds int    `json:"leaseSeconds,omitempty"`
+}
+
+type CompleteJobClaimRequest struct {
+	LeaseToken     string `json:"leaseToken"`
+	Status         string `json:"status"`
+	Reason         string `json:"reason,omitempty"`
+	SafeErrorClass string `json:"safeErrorClass,omitempty"`
+}
+
+type CompleteJobClaimResponse struct {
+	Job Job `json:"job"`
+}
+
 type problemResponse struct {
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
@@ -113,6 +188,36 @@ func (c *Client) ListStorageTargets(ctx context.Context, credential string, libr
 	}
 
 	return responseBody.StorageTargets, nil
+}
+
+func (c *Client) ClaimJob(ctx context.Context, credential string, request ClaimJobRequest) (ClaimJobResponse, error) {
+	responseBody := ClaimJobResponse{}
+	err := c.doJSON(ctx, http.MethodPost, "/v1/jobs/claims", request, credential, &responseBody)
+	if err != nil {
+		return ClaimJobResponse{}, err
+	}
+
+	return responseBody, nil
+}
+
+func (c *Client) HeartbeatJobClaim(ctx context.Context, credential string, jobID string, request HeartbeatJobClaimRequest) (ClaimedJob, error) {
+	responseBody := ClaimedJob{}
+	err := c.doJSON(ctx, http.MethodPost, "/v1/jobs/"+url.PathEscape(jobID)+"/claims/heartbeat", request, credential, &responseBody)
+	if err != nil {
+		return ClaimedJob{}, err
+	}
+
+	return responseBody, nil
+}
+
+func (c *Client) CompleteJobClaim(ctx context.Context, credential string, jobID string, request CompleteJobClaimRequest) (CompleteJobClaimResponse, error) {
+	responseBody := CompleteJobClaimResponse{}
+	err := c.doJSON(ctx, http.MethodPost, "/v1/jobs/"+url.PathEscape(jobID)+"/claims/complete", request, credential, &responseBody)
+	if err != nil {
+		return CompleteJobClaimResponse{}, err
+	}
+
+	return responseBody, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, method string, path string, body any, bearerToken string, target any) error {

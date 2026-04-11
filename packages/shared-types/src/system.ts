@@ -282,10 +282,28 @@ export interface JobLease {
   leaseExpiresAt: string
 }
 
+export interface JobExecutionManifest {
+  schemaVersion: 1
+  operation: 'archive-placement' | 'placement-verification'
+  storageTargetId: string
+  provider: string
+  relativePath: string
+  blobId?: string
+  assetId?: string
+  checksumSha256: string
+  sizeBytes?: number
+  source?: {
+    kind: 'agent-local-staging' | 'hosted-staging'
+    localSourceId?: string
+    stagingObjectId?: string
+  }
+}
+
 export interface ClaimJobResponse {
   claim?: {
     job: JobRun
     lease: JobLease
+    execution?: JobExecutionManifest
   }
   recoveredExpiredCount: number
 }

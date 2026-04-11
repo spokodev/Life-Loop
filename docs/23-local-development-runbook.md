@@ -108,6 +108,8 @@ curl -sS -X POST http://localhost:4000/v1/jobs/claims \
 
 The API returns safe job metadata plus an opaque `leaseToken`. Heartbeat and completion calls must include both the same device credential and the lease token. Expired `running` leases are recovered only during an explicit later claim request; the API does not run a hidden background executor.
 
+Executable desktop-agent claims may include an ADR-019 `execution` manifest. For the current executor slice, placement verification can run from `storageTargetId`, `provider`, `relativePath`, and `checksumSha256`; archive placement blocks safely until a supported non-path source resolver exists.
+
 Rollback note for migration `0007_job_claim_leases.sql`: before production use, take a database backup; rollback is limited to dropping claim/lease indexes and columns on `job_runs` because the current migration runner is forward-only.
 
 ## Desktop Agent Bootstrap

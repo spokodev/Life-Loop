@@ -7,6 +7,7 @@ import type {
   CreateJobResponse,
   HeartbeatJobClaimInput,
   HeartbeatJobClaimResponse,
+  JobExecutionManifest,
   JobRun,
   JobStatus,
   RestoreDrill,
@@ -40,6 +41,10 @@ type LeaseJobRow = JobRow & {
   leaseTokenHash: string | null
 }
 
+type ClaimJobRow = JobRow & {
+  execution: JobExecutionManifest | null
+}
+
 const defaultLeaseSeconds = 300
 
 const jobSelectSql = `
@@ -60,6 +65,11 @@ const jobSelectSql = `
   to_char(last_heartbeat_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "lastHeartbeatAt",
   to_char(started_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "startedAt",
   to_char(completed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "completedAt"
+`
+
+const jobClaimSelectSql = `
+  ${jobSelectSql},
+  payload->'execution' as "execution"
 `
 
 export async function listJobs(filters: JobFilters = {}) {
@@ -260,10 +270,10 @@ export async function claimNextJobForDevice(
     const credential = await authenticateClaimingDevice(client, authorizationToken)
     const recoveredJobIds = await recoverExpiredLeasesForLibrary(client, credential, correlationId)
 
-    const claimableResult = await client.query<JobRow>(
+    const claimableResult = await client.query<ClaimJobRow>(
       `
         select
-          ${jobSelectSql}
+          ${jobClaimSelectSql}
         from job_runs
         where library_id = $1::uuid
           and status in ('queued', 'retrying')
@@ -287,7 +297,7 @@ export async function claimNextJobForDevice(
 
     const leaseToken = generateJobLeaseToken()
     const leaseTokenHash = hashJobLeaseToken(leaseToken)
-    const claimedResult = await client.query<JobRow>(
+    const claimedResult = await client.query<ClaimJobRow>(
       `
         update job_runs
         set
@@ -301,7 +311,7 @@ export async function claimNextJobForDevice(
           updated_at = now()
         where id = $1::uuid
         returning
-          ${jobSelectSql}
+          ${jobClaimSelectSql}
       `,
       [claimableJob.id, credential.id, leaseTokenHash, leaseSeconds],
     )
@@ -335,6 +345,7 @@ export async function claimNextJobForDevice(
           leaseToken,
           leaseExpiresAt: claimedJob.leaseExpiresAt,
         },
+        ...(claimedJob.execution ? { execution: claimedJob.execution } : {}),
       },
     }
   } catch (error) {
@@ -776,7 +787,14 @@ async function findRestoreDrillById(client: PoolClient, restoreDrillId: string) 
   return result.rows[0]
 }
 
-function stripRestoreDrillId(job: JobRow): JobRun {
-  const { restoreDrillId: _restoreDrillId, ...jobWithoutRestoreDrillId } = job
+function stripRestoreDrillId(
+  job: JobRow & { execution?: unknown; leaseTokenHash?: unknown },
+): JobRun {
+  const {
+    execution: _execution,
+    leaseTokenHash: _leaseTokenHash,
+    restoreDrillId: _restoreDrillId,
+    ...jobWithoutRestoreDrillId
+  } = job
   return jobWithoutRestoreDrillId
 }

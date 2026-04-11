@@ -48,3 +48,13 @@ Rules:
 - missing, extra, or provider-mismatched bindings are logged without exposing local root paths to the control plane.
 - the agent validates root health locally at startup.
 - missing binding files do not stop heartbeat, but archive execution remains blocked until bindings exist.
+
+## Job execution
+After each heartbeat interval, the agent makes one bounded claim request for `archive-placement` and `placement-verification` jobs.
+
+Execution rules:
+- job claims use the device credential and a server-issued lease token.
+- `placement-verification` verifies the checksum at `binding.rootPath + execution.relativePath`.
+- `archive-placement` remains blocked until the job includes a supported non-path source reference from ADR-019.
+- missing manifests, missing bindings, provider mismatches, unsupported providers, unavailable disks, and checksum mismatches complete the claim as `blocked` with a safe error class.
+- completion reports do not include raw local filesystem paths.

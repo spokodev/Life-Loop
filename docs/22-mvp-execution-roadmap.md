@@ -52,11 +52,11 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 5. Desktop Archive Executor
 - Add a material execution-manifest ADR before implementing byte-moving executor behavior. **Done:** ADR-019 defines safe claim execution manifests, relative path constraints, agent-local source resolution, and blocked behavior for missing/unsupported manifests.
-- Implement agent polling/claim loop only after the job protocol ADR is accepted.
-- Execute archive-placement and placement-verification through the provider abstraction and local binding map.
-- Use temp writes, checksum verification, atomic rename, durable state transitions, and quarantine/blocking behavior for partial-copy failures.
-- Report only target ids, placement outcomes, checksums, health state, and safe error classes.
-- Test missing binding, provider mismatch, checksum mismatch, disk unavailable, retry-safe rerun, and unsupported future provider.
+- Implement agent polling/claim loop only after the job protocol ADR is accepted. **Done:** the Go agent polls one bounded job claim after heartbeat and completes claims through the lease API.
+- Execute archive-placement and placement-verification through the provider abstraction and local binding map. **Partial:** placement-verification executes via local binding + checksum verification; archive-placement blocks safely until a supported ADR-019 source resolver exists.
+- Use temp writes, checksum verification, atomic rename, durable state transitions, and quarantine/blocking behavior for partial-copy failures. **Partial:** checksum verification and blocked completion paths are wired; temp-write/atomic placement is available in the provider but not invoked for archive placement until source resolution is implemented.
+- Report only target ids, placement outcomes, checksums, health state, and safe error classes. **Done:** completion reports use status, safe reason, and safe error class only.
+- Test missing binding, provider mismatch, checksum mismatch, disk unavailable, retry-safe rerun, and unsupported future provider. **Done:** desktop executor unit tests cover these blocked/success paths for the implemented verification executor.
 
 ### 6. Restore Execution
 - Add explicit restore job semantics distinct from restore-readiness views.
