@@ -51,6 +51,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Test duplicate claims, terminal jobs, retry transitions, and blocked reasons. **Partial:** unit coverage verifies lease token hashing and transition reason rules; DB-backed concurrency and device-scope integration coverage still needs to be added with the executor slice.
 
 ### 5. Desktop Archive Executor
+- Add a material execution-manifest ADR before implementing byte-moving executor behavior. **Done:** ADR-019 defines safe claim execution manifests, relative path constraints, agent-local source resolution, and blocked behavior for missing/unsupported manifests.
 - Implement agent polling/claim loop only after the job protocol ADR is accepted.
 - Execute archive-placement and placement-verification through the provider abstraction and local binding map.
 - Use temp writes, checksum verification, atomic rename, durable state transitions, and quarantine/blocking behavior for partial-copy failures.
