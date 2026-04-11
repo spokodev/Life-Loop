@@ -16,7 +16,15 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/.next", "!**/.turbo", "!**/coverage"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/coverage",
+      "!**/.build",
+      "!**/.swiftpm"
+    ]
   },
   "javascript": {
     "formatter": {

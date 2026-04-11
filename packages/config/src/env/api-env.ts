@@ -19,6 +19,7 @@ const apiEnvSchema = z
     DATABASE_URL: z.string().url().default('postgres://lifeloop:lifeloop@localhost:5434/lifeloop'),
     CORS_ORIGIN: z.string().default('http://localhost:3000'),
     DEVICE_HEARTBEAT_STALE_AFTER_SECONDS: z.coerce.number().int().min(15).max(86_400).default(120),
+    HOSTED_STAGING_ROOT: z.string().default('/tmp/life-loop-staging'),
     CLERK_ISSUER_URL: optionalTrimmedString.pipe(z.string().url().optional()),
     CLERK_SECRET_KEY: optionalTrimmedString,
     STRIPE_SECRET_KEY: optionalTrimmedString,

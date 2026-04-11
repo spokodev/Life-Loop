@@ -10,6 +10,7 @@ import { cleanupRoutes } from './routes/cleanup'
 import { deviceAuthRoutes } from './routes/device-auth'
 import { healthRoutes } from './routes/health'
 import { jobsRoutes } from './routes/jobs'
+import { mobileStagingRoutes } from './routes/mobile-staging'
 import { registryRoutes } from './routes/registry'
 import { restoreRoutes } from './routes/restore'
 import { storageRoutes } from './routes/storage'
@@ -63,6 +64,7 @@ app.route('/v1', billingRoutes)
 app.route('/v1', cleanupRoutes)
 app.route('/v1', registryRoutes)
 app.route('/v1', jobsRoutes)
+app.route('/v1', mobileStagingRoutes)
 app.route('/v1', restoreRoutes)
 app.route('/v1', storageRoutes)
 

@@ -22,6 +22,7 @@ If implementation conflicts with those documents, stop and update ADRs instead o
 - `apps/web`: Next.js App Router control plane
 - `apps/api`: Hono control plane API with Postgres-backed schema and jobs metadata
 - `apps/desktop-agent`: Go desktop agent skeleton for local data-plane execution
+- `apps/ios`: SwiftUI iPhone ingest foundation for hosted staging uploads
 - `packages/shared-types`: shared lifecycle and domain types
 - `packages/design-tokens`: project-owned tokens and theme variables
 - `packages/ui`: reusable UI primitives and transition-state components

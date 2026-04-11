@@ -1,6 +1,7 @@
 import type {
   AssetLifecycleState,
   DeviceStatus,
+  HostedStagingStatus,
   JobKind,
   JobStatus,
   PlacementHealthState,
@@ -219,6 +220,47 @@ export interface RecordRestoreDrillEvidenceInput {
 export interface RecordRestoreDrillEvidenceResponse {
   drill: RestoreDrill
   evidence: RestoreDrillEvidence
+}
+
+export interface HostedStagingObject {
+  id: string
+  libraryId: string
+  deviceId: string
+  assetId?: string
+  status: HostedStagingStatus
+  filename: string
+  contentType?: string
+  checksumSha256: string
+  sizeBytes: number
+  uploadedBytes: number
+  expiresAt: string
+  retentionEligibleAt?: string
+  completedAt?: string
+  blockedReason?: string
+  safeErrorClass?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReserveHostedStagingUploadInput {
+  libraryId: string
+  filename: string
+  contentType?: string
+  checksumSha256: string
+  sizeBytes: number
+}
+
+export interface ReserveHostedStagingUploadResponse {
+  stagingObject: HostedStagingObject
+  upload: {
+    method: 'PUT'
+    url: string
+    expiresAt: string
+  }
+}
+
+export interface ListHostedStagingObjectsResponse {
+  stagingObjects: HostedStagingObject[]
 }
 
 export interface AuditEvent {

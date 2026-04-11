@@ -68,3 +68,15 @@ export type JobKind = (typeof jobKinds)[number]
 
 export const deviceStatuses = ['pending', 'active', 'paused', 'revoked'] as const
 export type DeviceStatus = (typeof deviceStatuses)[number]
+
+export const hostedStagingStatuses = [
+  'reserved',
+  'uploading',
+  'staged',
+  'archiving',
+  'verified',
+  'blocked',
+  'expired',
+] as const
+
+export type HostedStagingStatus = (typeof hostedStagingStatuses)[number]

@@ -15,6 +15,7 @@ test('parseApiEnv enables auth only when Clerk issuer is set', () => {
   assert.equal(env.CLERK_ISSUER_URL, undefined)
   assert.equal(env.CLERK_SECRET_KEY, undefined)
   assert.equal(env.DEVICE_HEARTBEAT_STALE_AFTER_SECONDS, 120)
+  assert.equal(env.HOSTED_STAGING_ROOT, '/tmp/life-loop-staging')
   assert.equal(env.billingEnabled, false)
 })
 

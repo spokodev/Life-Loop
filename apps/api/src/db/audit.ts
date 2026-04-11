@@ -160,6 +160,22 @@ function explainAuditEvent(eventType: string, payload: Record<string, unknown>) 
         summary: 'Restore drill evidence recorded',
         details: `Evidence status ${getStringPayloadValue(payload, 'evidenceStatus') ?? 'unknown'} was recorded for a restore drill${getStringPayloadValue(payload, 'safeErrorClass') ? ` • ${getStringPayloadValue(payload, 'safeErrorClass')}` : ''}.`,
       }
+    case 'hosted_staging.reserved':
+      return {
+        summary: 'Hosted staging reserved',
+        details: `${getStringPayloadValue(payload, 'filename') ?? 'Unknown asset'} reserved temporary iPhone staging space.`,
+      }
+    case 'hosted_staging.uploaded':
+      return {
+        summary: 'Hosted staging uploaded',
+        details:
+          'A mobile upload reached hosted staging only; archive and cleanup safety remain separate.',
+      }
+    case 'hosted_staging.blocked':
+      return {
+        summary: 'Hosted staging blocked',
+        details: `${getStringPayloadValue(payload, 'safeErrorClass') ?? 'hosted_staging.blocked'} • ${getStringPayloadValue(payload, 'reason') ?? 'Upload was blocked.'}`,
+      }
     case 'device.credential_issued':
       return {
         summary: 'Device credential issued',

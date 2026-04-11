@@ -14,3 +14,6 @@ apps/api/dist
 apps/web/.next
 packages/*/dist
 apps/desktop-agent/life-loop-agent
+apps/ios/.build
+apps/ios/.swiftpm
+.life-loop

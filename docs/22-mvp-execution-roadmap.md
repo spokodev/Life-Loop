@@ -72,10 +72,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Keep cleanup blocked without verified primary, verified replica, and restore posture. **Done:** cleanup readiness requires verified archive-primary, verified archive-replica, and asset-level verified restore-drill evidence from a passed drill before an item can enter manual review.
 
 ### 8. iPhone Ingest MVP
-- Add `apps/ios` SwiftUI foundation with PhotosPicker and background URLSession upload.
-- Add hosted cloud-staging API/storage abstraction only after retention/quota details are documented. **Done:** ADR-021 defines MVP hosted-staging size, quota, retention, and safety semantics.
-- Show mobile asset state as uploaded, staged, archiving, verified, or blocked without equating upload with archive safety.
-- Add simulator-build or Swift tests where local tooling supports them; otherwise document the exact Xcode validation command and blocker.
+- Add `apps/ios` SwiftUI foundation with PhotosPicker and background URLSession upload. **Done:** `apps/ios` contains a SwiftPM SwiftUI foundation with PhotosPicker state language and background `URLSession` upload task construction.
+- Add hosted cloud-staging API/storage abstraction only after retention/quota details are documented. **Done:** ADR-021 defines MVP hosted-staging size, quota, retention, and safety semantics; API staging reservations/uploads use those limits.
+- Show mobile asset state as uploaded, staged, archiving, verified, or blocked without equating upload with archive safety. **Done:** iOS state copy and API staging statuses preserve this separation.
+- Add simulator-build or Swift tests where local tooling supports them; otherwise document the exact Xcode validation command and blocker. **Partial:** Swift tests are present; Xcode validation command is documented in `apps/ios/README.md`.
 
 ### 9. Production Hardening
 - Finalize Docker production templates, env examples, healthchecks, migrations, Traefik labels, backup/restore notes, and `/opt/life-loop` deployment runbook.

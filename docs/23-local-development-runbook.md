@@ -136,6 +136,27 @@ ADR-021 defines the MVP hosted-staging policy before iPhone ingest implementatio
 
 Hosted staging is temporary convenience storage, not archive-primary or archive-replica storage. Upload completion must never mark an asset archived, verified, restore-ready, cleanup-eligible, or safe to remove from the phone.
 
+Migration `0009_hosted_staging_objects.sql` adds hosted staging metadata. Rollback is limited to dropping `hosted_staging_objects` and its indexes because the current migration runner is forward-only.
+
+Local API staging writes use `HOSTED_STAGING_ROOT`, defaulting to `/tmp/life-loop-staging`. To reserve and upload from an enrolled, active iOS device credential:
+
+```sh
+curl -sS -X POST http://localhost:4000/v1/mobile/staging/reservations \
+  -H "Authorization: Bearer <ios-device-credential>" \
+  -H "Content-Type: application/json" \
+  -d '{"libraryId":"<library-id>","filename":"IMG_0001.JPG","contentType":"image/jpeg","checksumSha256":"<64-char-sha256>","sizeBytes":12345}'
+```
+
+The reservation response returns a `PUT` upload URL. Upload success returns `staged`; it does not create archive verification, restore readiness, or cleanup eligibility.
+
+The iOS foundation lives in `apps/ios`:
+
+```sh
+cd apps/ios
+swift test
+xcodebuild -scheme LifeLoopiOS -destination 'generic/platform=iOS' build
+```
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 
