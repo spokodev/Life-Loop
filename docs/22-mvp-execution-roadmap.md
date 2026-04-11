@@ -83,9 +83,9 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Validate Docker Compose config, health endpoints, CI, and absence of `/home/deploy` production paths. **Partial:** `pnpm prod:check` validates the production baseline and CI runs it; live production health endpoint validation still requires deployed services.
 
 ### 10. Final MVP Audit
-- Run architecture, code, release-readiness, UI, transition, reduced-motion, security, and VPS QA checklists.
-- Update backlog/docs with completed work, intentional deferrals, and governing ADRs.
-- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks.
+- Run architecture, code, release-readiness, UI, transition, reduced-motion, security, and VPS QA checklists. **Partial:** `docs/25-mvp-audit-status.md` records the current QA review and explicitly marks the product as a strong foundation, not end-to-end complete.
+- Update backlog/docs with completed work, intentional deferrals, and governing ADRs. **Partial:** the audit lists completed work, not-complete gaps, and next execution order; remaining partials still need implementation.
+- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks. **Not complete:** archive placement from hosted or local staging, automated restore execution, and manual cleanup-review workflow remain open.
 
 ## Validation Policy
 - Run targeted package checks for the touched subsystem.

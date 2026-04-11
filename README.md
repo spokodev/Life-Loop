@@ -13,6 +13,7 @@ Repository documentation is authoritative. Start with:
 - `docs/22-mvp-execution-roadmap.md`
 - `docs/23-local-development-runbook.md`
 - `docs/24-production-deployment-runbook.md`
+- `docs/25-mvp-audit-status.md`
 - `docs/adr/`
 - `docs/design/`
 - `docs/qa/`

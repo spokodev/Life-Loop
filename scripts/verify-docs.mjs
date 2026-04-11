@@ -19,6 +19,7 @@ const requiredFiles = [
   'docs/19-implementation-readiness-check.md',
   'docs/20-final-audit-and-gap-closure.md',
   'docs/24-production-deployment-runbook.md',
+  'docs/25-mvp-audit-status.md',
   'docs/design/01-design-system-foundation.md',
   'docs/design/06-motion-system.md',
   'docs/design/09-transition-states-and-feedback.md',
