@@ -329,9 +329,9 @@ export async function listHostedStagingObjects(authorizationToken: string, libra
         select
           ${hostedStagingObjectSelectSql}
         from hosted_staging_objects hso
-        where hso.library_id = $1::uuid
-          and hso.device_id = $2::uuid
-        order by hso.created_at desc
+        where library_id = $1::uuid
+          and device_id = $2::uuid
+        order by created_at desc
         limit 50
       `,
       [scopedLibraryId, device.id],
@@ -476,27 +476,27 @@ export async function authorizeHostedStagingSourceFetch(
 }
 
 const hostedStagingObjectSelectSql = `
-  hso.id::text,
-  hso.library_id::text as "libraryId",
-  hso.device_id::text as "deviceId",
-  hso.asset_id::text as "assetId",
-  hso.object_key as "objectKey",
-  hso.status,
-  hso.filename,
-  hso.content_type as "contentType",
-  hso.checksum_sha256 as "checksumSha256",
-  hso.size_bytes::text as "sizeBytes",
-  hso.uploaded_bytes::text as "uploadedBytes",
-  to_char(hso.expires_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "expiresAt",
+  id::text,
+  library_id::text as "libraryId",
+  device_id::text as "deviceId",
+  asset_id::text as "assetId",
+  object_key as "objectKey",
+  status,
+  filename,
+  content_type as "contentType",
+  checksum_sha256 as "checksumSha256",
+  size_bytes::text as "sizeBytes",
+  uploaded_bytes::text as "uploadedBytes",
+  to_char(expires_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "expiresAt",
   to_char(
-    hso.retention_eligible_at at time zone 'utc',
+    retention_eligible_at at time zone 'utc',
     'YYYY-MM-DD"T"HH24:MI:SS"Z"'
   ) as "retentionEligibleAt",
-  to_char(hso.completed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "completedAt",
-  hso.blocked_reason as "blockedReason",
-  hso.safe_error_class as "safeErrorClass",
-  to_char(hso.created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-  to_char(hso.updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+  to_char(completed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "completedAt",
+  blocked_reason as "blockedReason",
+  safe_error_class as "safeErrorClass",
+  to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
+  to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
 `
 
 function assertIosDeviceCanStage(
@@ -543,8 +543,8 @@ async function findStagingObjectForDevice(
       select
         ${hostedStagingObjectSelectSql}
       from hosted_staging_objects hso
-      where hso.id = $1::uuid
-        and hso.device_id = $2::uuid
+      where id = $1::uuid
+        and device_id = $2::uuid
       ${forUpdate ? 'for update' : ''}
       limit 1
     `,
@@ -565,8 +565,8 @@ async function findStagingObjectForLibrary(
       select
         ${hostedStagingObjectSelectSql}
       from hosted_staging_objects hso
-      where hso.id = $1::uuid
-        and hso.library_id = $2::uuid
+      where id = $1::uuid
+        and library_id = $2::uuid
       ${forUpdate ? 'for update' : ''}
       limit 1
     `,

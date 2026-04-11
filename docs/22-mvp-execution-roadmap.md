@@ -48,7 +48,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Implement explicit claim, lease timeout, transition, retry, blocked, and terminal-state APIs without hidden automation. **Done:** API exposes device-authenticated claim, heartbeat, and complete/block/fail endpoints; expired leases are recovered only inside explicit claim calls.
 - Scope agent job claims to authenticated device/library. **Done:** claim mutations require a device credential and lease token; claims are limited to the credential library and device-targeted jobs.
 - Keep job state observable through jobs and activity surfaces. **Done:** jobs now expose claim timestamps and activity explains claim, heartbeat, expired-lease recovery, and claim-completion events.
-- Test duplicate claims, terminal jobs, retry transitions, and blocked reasons. **Partial:** unit coverage verifies lease token hashing and transition reason rules; DB-backed concurrency and device-scope integration coverage still needs to be added with the executor slice.
+- Test duplicate claims, terminal jobs, retry transitions, and blocked reasons. **Partial:** unit coverage verifies lease token hashing and transition reason rules; DB-backed hosted-staging claim/fetch smoke exists, but duplicate-claim concurrency coverage still needs to be added.
 
 ### 5. Desktop Archive Executor
 - Add a material execution-manifest ADR before implementing byte-moving executor behavior. **Done:** ADR-019 defines safe claim execution manifests, relative path constraints, agent-local source resolution, and blocked behavior for missing/unsupported manifests.
@@ -57,7 +57,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 - Execute archive-placement and placement-verification through the provider abstraction and local binding map. **Partial:** placement-verification executes via local binding + checksum verification; hosted-staging archive-placement now fetches bytes through a lease-authorized API route and uses the local provider `Put`; agent-local-staging remains safely blocked until a local source manifest exists.
 - Use temp writes, checksum verification, atomic rename, durable state transitions, and quarantine/blocking behavior for partial-copy failures. **Done for hosted-staging/local-disk:** the desktop executor writes fetched staged bytes to a temporary local source, then invokes the provider temp-write/checksum/atomic-rename path and reports blocked safe error classes for fetch, checksum, and disk failures.
 - Report only target ids, placement outcomes, checksums, health state, and safe error classes. **Done:** completion reports use status, safe reason, and safe error class only.
-- Test missing binding, provider mismatch, checksum mismatch, disk unavailable, retry-safe rerun, and unsupported future provider. **Done:** desktop executor unit tests cover these blocked/success paths for verification and hosted-staging archive placement; control-plane client tests cover the staged-object fetch request/stream and problem-detail failure path.
+- Test missing binding, provider mismatch, checksum mismatch, disk unavailable, retry-safe rerun, and unsupported future provider. **Done:** desktop executor unit tests cover these blocked/success paths for verification and hosted-staging archive placement; control-plane client tests cover the staged-object fetch request/stream and problem-detail failure path; `pnpm test:db:api` covers the DB-backed hosted-staging archive handoff smoke.
 
 ### 6. Restore Execution
 - Add explicit restore job semantics distinct from restore-readiness views. **Done:** ADR-020 defines restore-drill evidence as separate from metadata-only readiness and blocks false pass claims until explicit evidence exists.
@@ -86,7 +86,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 ### 10. Final MVP Audit
 - Run architecture, code, release-readiness, UI, transition, reduced-motion, security, and VPS QA checklists. **Partial:** `docs/25-mvp-audit-status.md` records the current QA review and explicitly marks the product as a strong foundation, not end-to-end complete.
 - Update backlog/docs with completed work, intentional deferrals, and governing ADRs. **Partial:** the audit lists completed work, not-complete gaps, and next execution order; remaining partials still need implementation.
-- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks. **Not complete:** DB-backed end-to-end hosted-staging archive smoke coverage, agent-local staging, automated restore execution, and manual cleanup-review workflow remain open.
+- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks. **Not complete:** agent-local staging, duplicate-claim concurrency integration coverage, automated restore execution, and manual cleanup-review workflow remain open.
 
 ## Validation Policy
 - Run targeted package checks for the touched subsystem.

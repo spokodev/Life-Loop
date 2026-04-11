@@ -20,3 +20,12 @@ export async function checkDatabaseConnection() {
   const result = await databasePool.query('select 1 as ok')
   return result.rows[0]?.ok === 1
 }
+
+export async function closeDatabasePool() {
+  if (!pool) {
+    return
+  }
+
+  await pool.end()
+  pool = undefined
+}

@@ -108,7 +108,15 @@ curl -sS -X POST http://localhost:4000/v1/jobs/claims \
 
 The API returns safe job metadata plus an opaque `leaseToken`. Heartbeat and completion calls must include both the same device credential and the lease token. Expired `running` leases are recovered only during an explicit later claim request; the API does not run a hidden background executor.
 
-Executable desktop-agent claims may include an ADR-019 `execution` manifest. For the current executor slice, placement verification can run from `storageTargetId`, `provider`, `relativePath`, and `checksumSha256`; archive placement blocks safely until a supported non-path source resolver exists.
+Executable desktop-agent claims may include an ADR-019 `execution` manifest. Placement verification can run from `storageTargetId`, `provider`, `relativePath`, and `checksumSha256`; hosted-staging archive placement uses the ADR-022 lease-authorized fetch route plus the desktop agent's local provider `Put` path. Agent-local staging remains safely blocked until a local source manifest exists.
+
+With local Postgres running and migrations applied, the hosted-staging archive handoff smoke can be run explicitly:
+
+```sh
+pnpm test:db:api
+```
+
+This DB-backed smoke covers iOS staging upload, desktop-device claim scoping, invalid lease rejection, staged-byte fetch, `archiving` status separation from archive safety, a verified placement ingest report, and expired hosted-staging object rejection.
 
 Rollback note for migration `0007_job_claim_leases.sql`: before production use, take a database backup; rollback is limited to dropping claim/lease indexes and columns on `job_runs` because the current migration runner is forward-only.
 
