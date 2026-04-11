@@ -149,6 +149,50 @@ export interface RestoreDrill {
   notes?: string
 }
 
+export type RestoreDrillEvidenceStatus =
+  | 'ready'
+  | 'restored'
+  | 'verified'
+  | 'partial'
+  | 'failed'
+  | 'blocked'
+
+export interface RestoreDrillEvidence {
+  id: string
+  restoreDrillId: string
+  assetId: string
+  storageTargetId?: string
+  candidateStatus: RestoreCandidate['restoreStatus']
+  evidenceStatus: RestoreDrillEvidenceStatus
+  checksumSha256?: string
+  safeErrorClass?: string
+  summary: string
+  verifiedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RestoreDrillDetail {
+  drill: RestoreDrill
+  evidence: RestoreDrillEvidence[]
+}
+
+export interface RecordRestoreDrillEvidenceInput {
+  assetId: string
+  storageTargetId?: string
+  candidateStatus: RestoreCandidate['restoreStatus']
+  evidenceStatus: RestoreDrillEvidenceStatus
+  checksumSha256?: string
+  safeErrorClass?: string
+  summary: string
+  verifiedAt?: string
+}
+
+export interface RecordRestoreDrillEvidenceResponse {
+  drill: RestoreDrill
+  evidence: RestoreDrillEvidence
+}
+
 export interface AuditEvent {
   id: string
   libraryId?: string

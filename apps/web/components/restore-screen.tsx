@@ -1,6 +1,10 @@
 'use client'
 
-import type { DashboardSnapshot, RestoreReadiness } from '@life-loop/shared-types'
+import type {
+  DashboardSnapshot,
+  RestoreDrillDetail,
+  RestoreReadiness,
+} from '@life-loop/shared-types'
 import {
   AppShell,
   Banner,
@@ -19,14 +23,18 @@ export function RestoreScreen({
   apiBaseUrl,
   authEnabled,
   readiness,
+  restoreDrillDetails,
   snapshot,
+  usingDrillDetailsFallback,
   usingReadinessFallback,
   usingSnapshotFallback,
 }: {
   apiBaseUrl: string
   authEnabled: boolean
   readiness: RestoreReadiness
+  restoreDrillDetails: RestoreDrillDetail[]
   snapshot: DashboardSnapshot
+  usingDrillDetailsFallback: boolean
   usingReadinessFallback: boolean
   usingSnapshotFallback: boolean
 }) {
@@ -47,7 +55,7 @@ export function RestoreScreen({
       summary="Restore answers what can be recovered and how safely. Drill history stays visible because backup claims without restore evidence are insufficient."
       title="Restore"
     >
-      {usingSnapshotFallback || usingReadinessFallback ? (
+      {usingSnapshotFallback || usingReadinessFallback || usingDrillDetailsFallback ? (
         <Banner
           description="Some restore data could not be loaded, so this screen stays conservative about restore confidence."
           title="Restore state unavailable"
@@ -214,6 +222,48 @@ export function RestoreScreen({
                   value={drill.status}
                 />
               ))}
+            </div>
+          </Card>
+        </section>
+      ) : null}
+
+      {restoreDrillDetails.length > 0 ? (
+        <section className="grid gap-4">
+          <Card className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium uppercase tracking-[0.16em] text-[hsl(var(--color-text-muted))]">
+                Evidence
+              </p>
+              <h2 className="text-xl font-semibold text-foreground">Restore evidence</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {restoreDrillDetails.map((detail) => {
+                const verifiedCount = detail.evidence.filter(
+                  (evidence) => evidence.evidenceStatus === 'verified',
+                ).length
+                const blockedCount = detail.evidence.filter(
+                  (evidence) =>
+                    evidence.evidenceStatus === 'blocked' || evidence.evidenceStatus === 'failed',
+                ).length
+
+                return (
+                  <StatusRow
+                    key={detail.drill.id}
+                    label={detail.drill.libraryId}
+                    meta={`${verifiedCount}/${detail.drill.sampleSize} verified • ${blockedCount} blocked/failed • ${detail.drill.notes ?? 'no notes'}`}
+                    tone={
+                      detail.drill.status === 'passed'
+                        ? 'success'
+                        : detail.drill.status === 'failed'
+                          ? 'danger'
+                          : detail.evidence.length > 0
+                            ? 'info'
+                            : 'warning'
+                    }
+                    value={detail.drill.status}
+                  />
+                )
+              })}
             </div>
           </Card>
         </section>

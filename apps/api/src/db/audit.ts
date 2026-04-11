@@ -155,6 +155,11 @@ function explainAuditEvent(eventType: string, payload: Record<string, unknown>) 
         summary: 'Job claim completed',
         details: `Claimed job moved to ${getStringPayloadValue(payload, 'toStatus') ?? 'unknown'}${getStringPayloadValue(payload, 'reason') ? ` • ${getStringPayloadValue(payload, 'reason')}` : ''}.`,
       }
+    case 'restore_drill.evidence_recorded':
+      return {
+        summary: 'Restore drill evidence recorded',
+        details: `Evidence status ${getStringPayloadValue(payload, 'evidenceStatus') ?? 'unknown'} was recorded for a restore drill${getStringPayloadValue(payload, 'safeErrorClass') ? ` • ${getStringPayloadValue(payload, 'safeErrorClass')}` : ''}.`,
+      }
     case 'device.credential_issued':
       return {
         summary: 'Device credential issued',

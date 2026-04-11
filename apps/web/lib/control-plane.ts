@@ -4,6 +4,7 @@ import type {
   AuditEvent,
   DashboardSnapshot,
   JobRun,
+  RestoreDrillDetail,
   RestoreReadiness,
   StorageReadiness,
 } from '@life-loop/shared-types'
@@ -172,11 +173,14 @@ export async function getAssetDetailPageData(assetId: string) {
 }
 
 export async function getRestorePageData() {
-  const [snapshotResult, readinessResult] = await Promise.allSettled([
+  const [snapshotResult, readinessResult, drillDetailsResult] = await Promise.allSettled([
     fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/status`, {
       cache: 'no-store',
     }),
     fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/restore/readiness`, {
+      cache: 'no-store',
+    }),
+    fetch(`${webEnv.NEXT_PUBLIC_API_URL}/v1/restore/drills`, {
       cache: 'no-store',
     }),
   ])
@@ -204,9 +208,20 @@ export async function getRestorePageData() {
     usingReadinessFallback = false
   }
 
+  let restoreDrillDetails: RestoreDrillDetail[] = []
+  let usingDrillDetailsFallback = true
+
+  if (drillDetailsResult.status === 'fulfilled' && drillDetailsResult.value.ok) {
+    const payload = (await drillDetailsResult.value.json()) as { drills: RestoreDrillDetail[] }
+    restoreDrillDetails = payload.drills
+    usingDrillDetailsFallback = false
+  }
+
   return {
     readiness,
+    restoreDrillDetails,
     snapshot,
+    usingDrillDetailsFallback,
     usingReadinessFallback,
     usingSnapshotFallback,
   }
