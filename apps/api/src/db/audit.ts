@@ -135,6 +135,26 @@ function explainAuditEvent(eventType: string, payload: Record<string, unknown>) 
         summary: 'Job status changed',
         details: `${getStringPayloadValue(payload, 'fromStatus') ?? 'unknown'} -> ${getStringPayloadValue(payload, 'toStatus') ?? 'unknown'}${getStringPayloadValue(payload, 'reason') ? ` • ${getStringPayloadValue(payload, 'reason')}` : ''}`,
       }
+    case 'job.claimed':
+      return {
+        summary: 'Job claimed',
+        details: `${getStringPayloadValue(payload, 'kind') ?? 'unknown job'} was leased to an authenticated device until ${getStringPayloadValue(payload, 'leaseExpiresAt') ?? 'an unknown time'}.`,
+      }
+    case 'job.lease_heartbeat':
+      return {
+        summary: 'Job lease heartbeat recorded',
+        details: `The active job lease was extended until ${getStringPayloadValue(payload, 'leaseExpiresAt') ?? 'an unknown time'}.`,
+      }
+    case 'job.expired_leases_recovered':
+      return {
+        summary: 'Expired job leases recovered',
+        details: `${String(payload.recoveredCount ?? 0)} running jobs were moved back to retrying by an explicit claim request.`,
+      }
+    case 'job.claim_completed':
+      return {
+        summary: 'Job claim completed',
+        details: `Claimed job moved to ${getStringPayloadValue(payload, 'toStatus') ?? 'unknown'}${getStringPayloadValue(payload, 'reason') ? ` • ${getStringPayloadValue(payload, 'reason')}` : ''}.`,
+      }
     case 'device.credential_issued':
       return {
         summary: 'Device credential issued',

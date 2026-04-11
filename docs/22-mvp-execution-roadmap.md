@@ -45,10 +45,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 4. Job Execution Architecture
 - Add an ADR for the concrete Postgres-backed job claim, lease, and heartbeat protocol before coding an executor. **Done:** ADR-018 defines explicit claim, lease token, heartbeat, timeout recovery, retry, blocked, and terminal-state rules.
-- Implement explicit claim, lease timeout, transition, retry, blocked, and terminal-state APIs without hidden automation.
-- Scope agent job claims to authenticated device/library.
-- Keep job state observable through jobs and activity surfaces.
-- Test duplicate claims, terminal jobs, retry transitions, and blocked reasons.
+- Implement explicit claim, lease timeout, transition, retry, blocked, and terminal-state APIs without hidden automation. **Done:** API exposes device-authenticated claim, heartbeat, and complete/block/fail endpoints; expired leases are recovered only inside explicit claim calls.
+- Scope agent job claims to authenticated device/library. **Done:** claim mutations require a device credential and lease token; claims are limited to the credential library and device-targeted jobs.
+- Keep job state observable through jobs and activity surfaces. **Done:** jobs now expose claim timestamps and activity explains claim, heartbeat, expired-lease recovery, and claim-completion events.
+- Test duplicate claims, terminal jobs, retry transitions, and blocked reasons. **Partial:** unit coverage verifies lease token hashing and transition reason rules; DB-backed concurrency and device-scope integration coverage still needs to be added with the executor slice.
 
 ### 5. Desktop Archive Executor
 - Implement agent polling/claim loop only after the job protocol ADR is accepted.

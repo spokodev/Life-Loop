@@ -94,6 +94,22 @@ Rollback note for migration `0006_billing_projection.sql`: before production use
 
 The billing projection is display-only for MVP. Stripe webhook events must verify signatures before persistence, and billing state must not change archive health, restore readiness, cleanup eligibility, or device-agent execution.
 
+## Job Claim Leases
+Migration `0007_job_claim_leases.sql` adds the claim/lease fields required by ADR-018. Run `pnpm db:migrate` after pulling it before exercising device-agent job claims.
+
+Device agents claim work with a device credential, not a Clerk user token:
+
+```sh
+curl -sS -X POST http://localhost:4000/v1/jobs/claims \
+  -H "Authorization: Bearer <device-credential>" \
+  -H "Content-Type: application/json" \
+  -d '{"kinds":["archive-placement"],"leaseSeconds":300}'
+```
+
+The API returns safe job metadata plus an opaque `leaseToken`. Heartbeat and completion calls must include both the same device credential and the lease token. Expired `running` leases are recovered only during an explicit later claim request; the API does not run a hidden background executor.
+
+Rollback note for migration `0007_job_claim_leases.sql`: before production use, take a database backup; rollback is limited to dropping claim/lease indexes and columns on `job_runs` because the current migration runner is forward-only.
+
 ## Desktop Agent Bootstrap
 The desktop agent is a local data-plane process. It must not upload raw local filesystem paths to the control plane.
 

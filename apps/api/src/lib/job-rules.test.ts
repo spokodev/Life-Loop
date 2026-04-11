@@ -23,6 +23,25 @@ test('validateJobTransition requires a reason for blocked status', () => {
   assert.equal(validationMessage, 'A reason is required when transitioning a job to blocked.')
 })
 
+test('validateJobTransition requires a reason for failed status', () => {
+  const validationMessage = validateJobTransition(baseJob, {
+    status: 'failed',
+  })
+
+  assert.equal(validationMessage, 'A reason is required when transitioning a job to failed.')
+})
+
+test('validateJobTransition requires a warning summary for completed_with_warnings', () => {
+  const validationMessage = validateJobTransition(baseJob, {
+    status: 'completed_with_warnings',
+  })
+
+  assert.equal(
+    validationMessage,
+    'A warning summary is required when transitioning a job to completed_with_warnings.',
+  )
+})
+
 test('validateJobTransition rejects reopening a terminal job', () => {
   const validationMessage = validateJobTransition(
     {

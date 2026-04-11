@@ -125,12 +125,17 @@ export interface JobRun {
   libraryId?: string
   assetId?: string
   deviceId?: string
+  claimedByDeviceId?: string
   kind: JobKind
   status: JobStatus
   correlationId: string
   attemptCount: number
   createdAt: string
   updatedAt: string
+  leaseExpiresAt?: string
+  lastHeartbeatAt?: string
+  startedAt?: string
+  completedAt?: string
   blockingReason?: string
 }
 
@@ -265,6 +270,47 @@ export interface TransitionJobInput {
   status: JobStatus
   reason?: string
   requestedBy?: OwnerIdentityInput
+}
+
+export interface ClaimJobInput {
+  kinds?: JobKind[]
+  leaseSeconds?: number
+}
+
+export interface JobLease {
+  leaseToken: string
+  leaseExpiresAt: string
+}
+
+export interface ClaimJobResponse {
+  claim?: {
+    job: JobRun
+    lease: JobLease
+  }
+  recoveredExpiredCount: number
+}
+
+export interface HeartbeatJobClaimInput {
+  leaseToken: string
+  leaseSeconds?: number
+}
+
+export interface HeartbeatJobClaimResponse {
+  job: JobRun
+  lease: JobLease
+}
+
+export type CompleteJobClaimStatus = 'succeeded' | 'completed_with_warnings' | 'failed' | 'blocked'
+
+export interface CompleteJobClaimInput {
+  leaseToken: string
+  status: CompleteJobClaimStatus
+  reason?: string
+  safeErrorClass?: string
+}
+
+export interface CompleteJobClaimResponse {
+  job: JobRun
 }
 
 export interface BillingStatus {

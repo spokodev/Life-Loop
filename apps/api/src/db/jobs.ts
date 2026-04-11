@@ -1,12 +1,19 @@
 import type {
+  ClaimJobInput,
+  ClaimJobResponse,
+  CompleteJobClaimInput,
+  CompleteJobClaimResponse,
   CreateJobInput,
   CreateJobResponse,
+  HeartbeatJobClaimInput,
+  HeartbeatJobClaimResponse,
   JobRun,
   JobStatus,
   RestoreDrill,
   TransitionJobInput,
 } from '@life-loop/shared-types'
 import type { PoolClient } from 'pg'
+import { generateJobLeaseToken, hashJobLeaseToken, verifyJobLeaseToken } from '../lib/job-lease'
 import {
   mapRestoreDrillFromStatus,
   validateCreateJobInput,
@@ -15,6 +22,7 @@ import {
 import { insertAuditEvent } from './audit'
 import { assertLibraryOwnedByClerkUser } from './authorization'
 import { getDatabasePool } from './client'
+import { type AuthenticatedDeviceCredential, authenticateDeviceCredential } from './device-auth'
 
 type JobFilters = {
   kind?: JobRun['kind']
@@ -27,6 +35,32 @@ type JobRow = JobRun & {
 }
 
 type RestoreDrillRow = RestoreDrill
+
+type LeaseJobRow = JobRow & {
+  leaseTokenHash: string | null
+}
+
+const defaultLeaseSeconds = 300
+
+const jobSelectSql = `
+  id::text,
+  library_id::text as "libraryId",
+  asset_id::text as "assetId",
+  device_id::text as "deviceId",
+  claimed_by_device_id::text as "claimedByDeviceId",
+  kind,
+  status,
+  correlation_id::text as "correlationId",
+  attempt_count as "attemptCount",
+  blocking_reason as "blockingReason",
+  payload->>'restoreDrillId' as "restoreDrillId",
+  to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
+  to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt",
+  to_char(lease_expires_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "leaseExpiresAt",
+  to_char(last_heartbeat_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "lastHeartbeatAt",
+  to_char(started_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "startedAt",
+  to_char(completed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "completedAt"
+`
 
 export async function listJobs(filters: JobFilters = {}) {
   const databasePool = getDatabasePool()
@@ -52,18 +86,7 @@ export async function listJobs(filters: JobFilters = {}) {
   const result = await databasePool.query<JobRow>(
     `
       select
-        id::text,
-        library_id::text as "libraryId",
-        asset_id::text as "assetId",
-        device_id::text as "deviceId",
-        kind,
-        status,
-        correlation_id::text as "correlationId",
-        attempt_count as "attemptCount",
-        blocking_reason as "blockingReason",
-        payload->>'restoreDrillId' as "restoreDrillId",
-        to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-        to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+        ${jobSelectSql}
       from job_runs
       ${whereClause}
       order by updated_at desc
@@ -171,18 +194,7 @@ export async function createJobRecord(
         )
         values ($1::uuid, $2::uuid, $3::uuid, $4, 'queued', $5::uuid, 0, null, $6::jsonb, $7)
         returning
-          id::text,
-          library_id::text as "libraryId",
-          asset_id::text as "assetId",
-          device_id::text as "deviceId",
-          kind,
-          status,
-          correlation_id::text as "correlationId",
-          attempt_count as "attemptCount",
-          blocking_reason as "blockingReason",
-          payload->>'restoreDrillId' as "restoreDrillId",
-          to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-          to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+          ${jobSelectSql}
       `,
       [
         input.libraryId,
@@ -226,6 +238,246 @@ export async function createJobRecord(
     }
 
     return response
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function claimNextJobForDevice(
+  authorizationToken: string,
+  input: ClaimJobInput,
+  correlationId: string,
+): Promise<ClaimJobResponse> {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+  const leaseSeconds = input.leaseSeconds ?? defaultLeaseSeconds
+
+  try {
+    await client.query('begin')
+    const credential = await authenticateClaimingDevice(client, authorizationToken)
+    const recoveredJobIds = await recoverExpiredLeasesForLibrary(client, credential, correlationId)
+
+    const claimableResult = await client.query<JobRow>(
+      `
+        select
+          ${jobSelectSql}
+        from job_runs
+        where library_id = $1::uuid
+          and status in ('queued', 'retrying')
+          and (device_id is null or device_id = $2::uuid)
+          and ($3::text[] is null or kind = any($3::text[]))
+        order by updated_at asc, created_at asc
+        for update skip locked
+        limit 1
+      `,
+      [credential.libraryId, credential.id, input.kinds ?? null],
+    )
+
+    const claimableJob = claimableResult.rows[0]
+
+    if (!claimableJob) {
+      await client.query('commit')
+      return {
+        recoveredExpiredCount: recoveredJobIds.length,
+      }
+    }
+
+    const leaseToken = generateJobLeaseToken()
+    const leaseTokenHash = hashJobLeaseToken(leaseToken)
+    const claimedResult = await client.query<JobRow>(
+      `
+        update job_runs
+        set
+          status = 'running',
+          claimed_by_device_id = $2::uuid,
+          lease_token_hash = $3,
+          lease_expires_at = now() + make_interval(secs => $4::int),
+          last_heartbeat_at = now(),
+          started_at = coalesce(started_at, now()),
+          blocking_reason = null,
+          updated_at = now()
+        where id = $1::uuid
+        returning
+          ${jobSelectSql}
+      `,
+      [claimableJob.id, credential.id, leaseTokenHash, leaseSeconds],
+    )
+    const claimedJob = claimedResult.rows[0]
+
+    if (!claimedJob?.leaseExpiresAt) {
+      throw new Error('Job claim did not return a lease.')
+    }
+
+    await insertAuditEvent(client, {
+      actorId: credential.id,
+      actorType: 'device',
+      correlationId,
+      eventType: 'job.claimed',
+      libraryId: credential.libraryId,
+      payload: {
+        deviceId: credential.id,
+        jobId: claimedJob.id,
+        kind: claimedJob.kind,
+        leaseExpiresAt: claimedJob.leaseExpiresAt,
+      },
+    })
+
+    await client.query('commit')
+
+    return {
+      recoveredExpiredCount: recoveredJobIds.length,
+      claim: {
+        job: stripRestoreDrillId(claimedJob),
+        lease: {
+          leaseToken,
+          leaseExpiresAt: claimedJob.leaseExpiresAt,
+        },
+      },
+    }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function heartbeatClaimedJob(
+  authorizationToken: string,
+  jobId: string,
+  input: HeartbeatJobClaimInput,
+  correlationId: string,
+): Promise<HeartbeatJobClaimResponse> {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+  const leaseSeconds = input.leaseSeconds ?? defaultLeaseSeconds
+
+  try {
+    await client.query('begin')
+    const credential = await authenticateClaimingDevice(client, authorizationToken)
+    await assertActiveClaimLease(client, jobId, credential, input.leaseToken)
+
+    const heartbeatResult = await client.query<JobRow>(
+      `
+        update job_runs
+        set
+          lease_expires_at = now() + make_interval(secs => $3::int),
+          last_heartbeat_at = now(),
+          updated_at = now()
+        where id = $1::uuid
+          and claimed_by_device_id = $2::uuid
+        returning
+          ${jobSelectSql}
+      `,
+      [jobId, credential.id, leaseSeconds],
+    )
+    const updatedJob = heartbeatResult.rows[0]
+
+    if (!updatedJob?.leaseExpiresAt) {
+      throw new Error('Job heartbeat did not return a lease.')
+    }
+
+    await insertAuditEvent(client, {
+      actorId: credential.id,
+      actorType: 'device',
+      correlationId,
+      eventType: 'job.lease_heartbeat',
+      libraryId: credential.libraryId,
+      payload: {
+        deviceId: credential.id,
+        jobId: updatedJob.id,
+        leaseExpiresAt: updatedJob.leaseExpiresAt,
+      },
+    })
+
+    await client.query('commit')
+
+    return {
+      job: stripRestoreDrillId(updatedJob),
+      lease: {
+        leaseToken: input.leaseToken,
+        leaseExpiresAt: updatedJob.leaseExpiresAt,
+      },
+    }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function completeClaimedJob(
+  authorizationToken: string,
+  jobId: string,
+  input: CompleteJobClaimInput,
+  correlationId: string,
+): Promise<CompleteJobClaimResponse> {
+  const databasePool = getDatabasePool()
+  const client = await databasePool.connect()
+
+  try {
+    await client.query('begin')
+    const credential = await authenticateClaimingDevice(client, authorizationToken)
+    const currentJob = await assertActiveClaimLease(client, jobId, credential, input.leaseToken)
+    const validationMessage = validateJobTransition(stripRestoreDrillId(currentJob), {
+      status: input.status,
+      ...(input.reason ? { reason: input.reason } : {}),
+    })
+
+    if (validationMessage) {
+      throw new Error(validationMessage)
+    }
+
+    const completedResult = await client.query<JobRow>(
+      `
+        update job_runs
+        set
+          status = $2,
+          blocking_reason = $3,
+          lease_token_hash = null,
+          lease_expires_at = null,
+          completed_at = case when $2 = 'blocked' then null else now() end,
+          payload = case
+            when $4::text is null then payload
+            else jsonb_set(coalesce(payload, '{}'::jsonb), '{safeErrorClass}', to_jsonb($4::text), true)
+          end,
+          updated_at = now()
+        where id = $1::uuid
+        returning
+          ${jobSelectSql}
+      `,
+      [jobId, input.status, input.reason?.trim() || null, input.safeErrorClass ?? null],
+    )
+    const completedJob = completedResult.rows[0]
+
+    if (!completedJob) {
+      throw new Error('Job completion did not return a row.')
+    }
+
+    await insertAuditEvent(client, {
+      actorId: credential.id,
+      actorType: 'device',
+      correlationId,
+      eventType: 'job.claim_completed',
+      libraryId: credential.libraryId,
+      payload: {
+        deviceId: credential.id,
+        jobId: completedJob.id,
+        reason: input.reason ?? null,
+        safeErrorClass: input.safeErrorClass ?? null,
+        toStatus: completedJob.status,
+      },
+    })
+
+    await client.query('commit')
+
+    return {
+      job: stripRestoreDrillId(completedJob),
+    }
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -279,21 +531,17 @@ export async function transitionJobRecord(
           status = $2,
           blocking_reason = $3,
           attempt_count = $4,
+          lease_token_hash = case when $2 = 'running' then lease_token_hash else null end,
+          lease_expires_at = case when $2 = 'running' then lease_expires_at else null end,
+          completed_at = case
+            when $2 in ('succeeded', 'completed_with_warnings', 'failed', 'cancelled') then coalesce(completed_at, now())
+            when $2 in ('queued', 'retrying', 'running') then null
+            else completed_at
+          end,
           updated_at = now()
         where id = $1::uuid
         returning
-          id::text,
-          library_id::text as "libraryId",
-          asset_id::text as "assetId",
-          device_id::text as "deviceId",
-          kind,
-          status,
-          correlation_id::text as "correlationId",
-          attempt_count as "attemptCount",
-          blocking_reason as "blockingReason",
-          payload->>'restoreDrillId' as "restoreDrillId",
-          to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-          to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+          ${jobSelectSql}
       `,
       [jobId, input.status, input.reason?.trim() || null, nextAttemptCount],
     )
@@ -371,22 +619,116 @@ export async function transitionJobRecord(
   }
 }
 
+async function authenticateClaimingDevice(client: PoolClient, authorizationToken: string) {
+  const credential = await authenticateDeviceCredential(client, authorizationToken)
+
+  if (credential.status === 'revoked') {
+    throw new Error('Device has been revoked.')
+  }
+
+  if (credential.status === 'paused') {
+    throw new Error('Device is paused.')
+  }
+
+  return credential
+}
+
+async function recoverExpiredLeasesForLibrary(
+  client: PoolClient,
+  credential: AuthenticatedDeviceCredential,
+  correlationId: string,
+) {
+  const recoveredResult = await client.query<{ id: string }>(
+    `
+      update job_runs
+      set
+        status = 'retrying',
+        attempt_count = attempt_count + 1,
+        blocking_reason = 'Lease expired before completion.',
+        claimed_by_device_id = null,
+        lease_token_hash = null,
+        lease_expires_at = null,
+        last_heartbeat_at = null,
+        updated_at = now()
+      where library_id = $1::uuid
+        and status = 'running'
+        and lease_expires_at is not null
+        and lease_expires_at <= now()
+      returning id::text
+    `,
+    [credential.libraryId],
+  )
+
+  if (recoveredResult.rows.length > 0) {
+    await insertAuditEvent(client, {
+      actorId: credential.id,
+      actorType: 'device',
+      correlationId,
+      eventType: 'job.expired_leases_recovered',
+      libraryId: credential.libraryId,
+      payload: {
+        deviceId: credential.id,
+        recoveredJobIds: recoveredResult.rows.map((row) => row.id),
+        recoveredCount: recoveredResult.rows.length,
+      },
+    })
+  }
+
+  return recoveredResult.rows.map((row) => row.id)
+}
+
+async function assertActiveClaimLease(
+  client: PoolClient,
+  jobId: string,
+  credential: AuthenticatedDeviceCredential,
+  leaseToken: string,
+) {
+  const result = await client.query<LeaseJobRow>(
+    `
+      select
+        ${jobSelectSql},
+        lease_token_hash as "leaseTokenHash"
+      from job_runs
+      where id = $1::uuid
+      for update
+      limit 1
+    `,
+    [jobId],
+  )
+  const job = result.rows[0]
+
+  if (!job) {
+    throw new Error('Job not found.')
+  }
+
+  if (job.libraryId !== credential.libraryId) {
+    throw new Error('Authenticated device does not belong to the job library.')
+  }
+
+  if (job.status !== 'running') {
+    throw new Error(`Job ${job.id} is not running and cannot be mutated by a claim lease.`)
+  }
+
+  if (job.claimedByDeviceId !== credential.id) {
+    throw new Error('Job claim is owned by a different device.')
+  }
+
+  if (!verifyJobLeaseToken(leaseToken, job.leaseTokenHash)) {
+    throw new Error('Job lease token is invalid.')
+  }
+
+  if (!job.leaseExpiresAt || Date.parse(job.leaseExpiresAt) <= Date.now()) {
+    throw new Error('Job lease has expired and must be reclaimed.')
+  }
+
+  return job
+}
+
 async function findJobById(client: PoolClient, jobId: string, forUpdate = false) {
   const result = await client.query<JobRow>(
     `
       select
-        id::text,
-        library_id::text as "libraryId",
-        asset_id::text as "assetId",
-        device_id::text as "deviceId",
-        kind,
-        status,
-        correlation_id::text as "correlationId",
-        attempt_count as "attemptCount",
-        blocking_reason as "blockingReason",
-        payload->>'restoreDrillId' as "restoreDrillId",
-        to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-        to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+        ${jobSelectSql}
       from job_runs
       where id = $1::uuid
       ${forUpdate ? 'for update' : ''}
@@ -402,18 +744,7 @@ async function findJobByIdempotencyKey(client: PoolClient, idempotencyKey: strin
   const result = await client.query<JobRow>(
     `
       select
-        id::text,
-        library_id::text as "libraryId",
-        asset_id::text as "assetId",
-        device_id::text as "deviceId",
-        kind,
-        status,
-        correlation_id::text as "correlationId",
-        attempt_count as "attemptCount",
-        blocking_reason as "blockingReason",
-        payload->>'restoreDrillId' as "restoreDrillId",
-        to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-        to_char(updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updatedAt"
+        ${jobSelectSql}
       from job_runs
       where idempotency_key = $1
       limit 1
