@@ -102,6 +102,32 @@ test('validateCreateJobInput accepts a safe hosted-staging archive execution man
   assert.equal(validationMessage, null)
 })
 
+test('validateCreateJobInput accepts a safe restore-drill execution manifest without a preexisting drill id', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'restore-drill',
+    execution: {
+      schemaVersion: 1,
+      operation: 'restore-drill',
+      samples: [
+        {
+          assetId: '73562706-d37d-4eec-8732-e8659ba13e7d',
+          candidateStatus: 'ready',
+          source: {
+            storageTargetId: 'target-1',
+            provider: 'local-disk',
+            relativePath: '2026/04/original.bin',
+            checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            sizeBytes: 128,
+          },
+        },
+      ],
+    },
+  })
+
+  assert.equal(validationMessage, null)
+})
+
 test('validateCreateJobInput rejects archive execution without a source', () => {
   const validationMessage = validateCreateJobInput({
     libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
@@ -160,4 +186,33 @@ test('validateCreateJobInput rejects hosted-staging source without staging objec
   })
 
   assert.equal(validationMessage, 'Hosted-staging execution manifests require a staging object id.')
+})
+
+test('validateCreateJobInput rejects unsafe restore-drill sample paths', () => {
+  const validationMessage = validateCreateJobInput({
+    libraryId: '179a1414-2f59-410d-a32d-c9d27c7623ab',
+    kind: 'restore-drill',
+    execution: {
+      schemaVersion: 1,
+      operation: 'restore-drill',
+      restoreDrillId: '13bcfd33-d477-4c52-943e-25ef423fbf67',
+      samples: [
+        {
+          assetId: '73562706-d37d-4eec-8732-e8659ba13e7d',
+          candidateStatus: 'ready',
+          source: {
+            storageTargetId: 'target-1',
+            provider: 'local-disk',
+            relativePath: '../escape.bin',
+            checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        },
+      ],
+    },
+  })
+
+  assert.equal(
+    validationMessage,
+    'Restore-drill execution sample relative paths must stay within the storage target root.',
+  )
 })

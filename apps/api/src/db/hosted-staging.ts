@@ -393,11 +393,12 @@ export async function authorizeHostedStagingSourceFetch(
       throw new Error('Job lease has expired and must be reclaimed.')
     }
 
-    const executionSource = job.execution?.source
-    if (
-      job.execution?.operation !== 'archive-placement' ||
-      executionSource?.kind !== 'hosted-staging'
-    ) {
+    if (job.execution?.operation !== 'archive-placement') {
+      throw new Error('Job execution manifest does not reference a hosted-staging archive source.')
+    }
+
+    const executionSource = job.execution.source
+    if (executionSource?.kind !== 'hosted-staging') {
       throw new Error('Job execution manifest does not reference a hosted-staging archive source.')
     }
 

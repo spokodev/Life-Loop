@@ -62,10 +62,10 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 ### 6. Restore Execution
 - Add explicit restore job semantics distinct from restore-readiness views. **Done:** ADR-020 defines restore-drill evidence as separate from metadata-only readiness and blocks false pass claims until explicit evidence exists.
 - Add desktop restore execution semantics before coding the agent restore executor. **Done:** ADR-023 defines claim-only restore-drill manifests, agent-local restore workspace semantics, safe evidence reporting, and no product cleanup/delete behavior.
-- Implement restore-drill execution for small samples. **Partial:** API records per-asset evidence and rolls up pass/fail only from explicit evidence; verified evidence now requires a matching healthy verified original placement, and operator job transitions cannot mark a drill passed without evidence. Automated data-plane restore execution remains blocked until a restore executor exists.
+- Implement restore-drill execution for small samples. **Partial:** API records per-asset evidence and rolls up pass/fail only from explicit evidence; verified evidence now requires a matching healthy verified original placement, and operator job transitions cannot mark a drill passed without evidence. The desktop agent can claim ADR-023 `restore-drill` manifests, copy sampled local-disk placements into an agent-local restore workspace, verify checksums, and report safe per-sample evidence; a control-plane manifest builder is still needed before this is fully productized from the web/API.
 - Record drill state and surface pass/fail history in API and web. **Done:** restore evidence has a DB table, device-scoped recording endpoint, drill detail endpoint, and restore page evidence summary.
 - Do not claim restore safety without verified placement and drill evidence. **Done for API safety gate:** DB-backed smoke coverage rejects missing/wrong placement evidence and only passes after explicit verified evidence matches the asset placement.
-- Test ready, degraded, blocked, partial-success, and failed restore evidence paths.
+- Test ready, degraded, blocked, partial-success, and failed restore evidence paths. **Partial:** API unit/DB coverage verifies evidence safety gates; desktop-agent unit coverage verifies successful sample restore, missing workspace blocking, checksum mismatch evidence, and safe reporting. End-to-end restore-drill smoke still needs a manifest-builder flow.
 
 ### 7. Cleanup Policy
 - Implement manual cleanup-review jobs and UI states only. **Partial:** cleanup now has a read-only API/web review surface; cleanup-review job execution remains intentionally unimplemented until an explicit manual review workflow exists.
@@ -87,7 +87,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 ### 10. Final MVP Audit
 - Run architecture, code, release-readiness, UI, transition, reduced-motion, security, and VPS QA checklists. **Partial:** `docs/25-mvp-audit-status.md` records the current QA review and explicitly marks the product as a strong foundation, not end-to-end complete.
 - Update backlog/docs with completed work, intentional deferrals, and governing ADRs. **Partial:** the audit lists completed work, not-complete gaps, and next execution order; remaining partials still need implementation.
-- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks. **Not complete:** agent-local staging, automated restore execution, and manual cleanup-review workflow remain open.
+- Acceptance target: clone, install, start infra, migrate DB, start web/API/agent, enroll device, register storage target, bind local target, run ingest/archive/verify/restore-drill flows, view status/activity, and pass CI-quality checks. **Not complete:** agent-local staging, restore-drill manifest builder/end-to-end UI flow, and manual cleanup-review workflow remain open.
 
 ## Validation Policy
 - Run targeted package checks for the touched subsystem.

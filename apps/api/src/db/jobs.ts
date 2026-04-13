@@ -182,11 +182,13 @@ export async function createJobRecord(
       restoreDrillId = restoreDrill.id
     }
 
+    const execution = normalizeExecutionForPayload(input.execution, restoreDrillId)
+
     const payload = {
       ...(input.metadata?.scopeSummary ? { scopeSummary: input.metadata.scopeSummary } : {}),
       ...(input.metadata?.notes ? { notes: input.metadata.notes } : {}),
       ...(restoreDrillId ? { restoreDrillId } : {}),
-      ...(input.execution ? { execution: input.execution } : {}),
+      ...(execution ? { execution } : {}),
     }
 
     const jobResult = await client.query<JobRow>(
@@ -798,4 +800,26 @@ function stripRestoreDrillId(
     ...jobWithoutRestoreDrillId
   } = job
   return jobWithoutRestoreDrillId
+}
+
+function normalizeExecutionForPayload(
+  execution: CreateJobInput['execution'],
+  restoreDrillId: string | undefined,
+): JobExecutionManifest | undefined {
+  if (!execution) {
+    return undefined
+  }
+
+  if (execution.operation !== 'restore-drill') {
+    return execution
+  }
+
+  if (!restoreDrillId) {
+    throw new Error('Restore-drill execution requires a persisted restore drill.')
+  }
+
+  return {
+    ...execution,
+    restoreDrillId,
+  }
 }

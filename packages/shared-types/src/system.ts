@@ -371,7 +371,7 @@ export interface CreateJobInput {
     sampleSize?: number
     notes?: string
   }
-  execution?: JobExecutionManifest
+  execution?: CreateJobExecutionManifest
   requestedBy?: OwnerIdentityInput
 }
 
@@ -397,9 +397,19 @@ export interface JobLease {
   leaseExpiresAt: string
 }
 
-export interface JobExecutionManifest {
+export type JobExecutionManifest =
+  | ArchivePlacementExecutionManifest
+  | PlacementVerificationExecutionManifest
+  | RestoreDrillExecutionManifest
+
+export type CreateJobExecutionManifest =
+  | ArchivePlacementExecutionManifest
+  | PlacementVerificationExecutionManifest
+  | CreateRestoreDrillExecutionManifest
+
+export interface ArchivePlacementExecutionManifest {
   schemaVersion: 1
-  operation: 'archive-placement' | 'placement-verification'
+  operation: 'archive-placement'
   storageTargetId: string
   provider: string
   relativePath: string
@@ -411,6 +421,43 @@ export interface JobExecutionManifest {
     kind: 'agent-local-staging' | 'hosted-staging'
     localSourceId?: string
     stagingObjectId?: string
+  }
+}
+
+export interface PlacementVerificationExecutionManifest {
+  schemaVersion: 1
+  operation: 'placement-verification'
+  storageTargetId: string
+  provider: string
+  relativePath: string
+  blobId?: string
+  assetId?: string
+  checksumSha256: string
+  sizeBytes?: number
+}
+
+export interface RestoreDrillExecutionManifest {
+  schemaVersion: 1
+  operation: 'restore-drill'
+  restoreDrillId: string
+  samples: RestoreDrillExecutionSample[]
+}
+
+export interface CreateRestoreDrillExecutionManifest
+  extends Omit<RestoreDrillExecutionManifest, 'restoreDrillId'> {
+  restoreDrillId?: string
+}
+
+export interface RestoreDrillExecutionSample {
+  assetId: string
+  candidateStatus: RestoreCandidate['restoreStatus']
+  source: {
+    storageTargetId: string
+    provider: string
+    relativePath: string
+    checksumSha256: string
+    blobId?: string
+    sizeBytes?: number
   }
 }
 

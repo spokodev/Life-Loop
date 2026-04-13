@@ -108,7 +108,7 @@ curl -sS -X POST http://localhost:4000/v1/jobs/claims \
 
 The API returns safe job metadata plus an opaque `leaseToken`. Heartbeat and completion calls must include both the same device credential and the lease token. Expired `running` leases are recovered only during an explicit later claim request; the API does not run a hidden background executor.
 
-Executable desktop-agent claims may include an ADR-019 `execution` manifest. Placement verification can run from `storageTargetId`, `provider`, `relativePath`, and `checksumSha256`; hosted-staging archive placement uses the ADR-022 lease-authorized fetch route plus the desktop agent's local provider `Put` path. Agent-local staging remains safely blocked until a local source manifest exists.
+Executable desktop-agent claims may include an ADR-019/ADR-023 `execution` manifest. Placement verification can run from `storageTargetId`, `provider`, `relativePath`, and `checksumSha256`; hosted-staging archive placement uses the ADR-022 lease-authorized fetch route plus the desktop agent's local provider `Put` path. Restore-drill execution requires an ADR-023 `restore-drill` manifest and a configured agent-local restore workspace. Agent-local staging remains safely blocked until a local source manifest exists.
 
 With local Postgres running and migrations applied, the hosted-staging archive handoff smoke can be run explicitly:
 
@@ -120,7 +120,7 @@ This DB-backed smoke runs serially because it applies migrations against a share
 
 Rollback note for migration `0007_job_claim_leases.sql`: before production use, take a database backup; rollback is limited to dropping claim/lease indexes and columns on `job_runs` because the current migration runner is forward-only.
 
-Migration `0008_restore_drill_evidence.sql` adds restore-drill evidence rows. Evidence is separate from restore-readiness metadata: a drill can pass only after sampled assets have explicit `verified` evidence records. Rollback is limited to dropping `restore_drill_evidence` because the current migration runner is forward-only.
+Migration `0008_restore_drill_evidence.sql` adds restore-drill evidence rows. Evidence is separate from restore-readiness metadata: a drill can pass only after sampled assets have explicit `verified` evidence records. The desktop agent reports restore-drill evidence with a device credential and safe status/error classes only; raw local restore/source paths remain agent-local. Rollback is limited to dropping `restore_drill_evidence` because the current migration runner is forward-only.
 
 Migration `0010_restore_evidence_asset_fk_cascade.sql` normalizes the restore evidence asset foreign key to `on delete cascade` for existing databases. This keeps `asset_id` non-null while preserving clean library/asset deletion during tests and operator cleanup. Rollback requires dropping and recreating that foreign key with the previous action, so take a backup before production migration.
 
@@ -176,10 +176,13 @@ Run from the agent package:
 cd apps/desktop-agent
 LIFE_LOOP_CONTROL_PLANE_URL=http://localhost:4000 \
 LIFE_LOOP_ENROLLMENT_TOKEN=<one-time-token-from-control-plane> \
+LIFE_LOOP_RESTORE_DRILL_ROOT_PATH=/tmp/life-loop-restore-drills \
 go run ./cmd/life-loop-agent
 ```
 
 After enrollment, the agent stores a device-scoped credential in its local config path. Later starts can use the saved credential automatically or use `LIFE_LOOP_DEVICE_CREDENTIAL` for an explicit local override.
+
+`LIFE_LOOP_RESTORE_DRILL_ROOT_PATH` is required only for executable restore-drill claims. If it is unset or not a writable local directory, restore-drill claims record blocked evidence with a safe error class instead of passing. This workspace is for temporary agent-local drill artifacts only; it is not product cleanup eligibility and must not delete originals, phone assets, archive placements, or hosted staging objects.
 
 Storage target bindings are agent-local JSON:
 

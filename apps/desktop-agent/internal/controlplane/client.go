@@ -93,16 +93,33 @@ type JobExecutionSource struct {
 }
 
 type JobExecutionManifest struct {
-	SchemaVersion   int                 `json:"schemaVersion"`
-	Operation       string              `json:"operation"`
-	StorageTargetID string              `json:"storageTargetId"`
-	Provider        string              `json:"provider"`
-	RelativePath    string              `json:"relativePath"`
-	BlobID          string              `json:"blobId,omitempty"`
-	AssetID         string              `json:"assetId,omitempty"`
-	ChecksumSHA256  string              `json:"checksumSha256"`
-	SizeBytes       int64               `json:"sizeBytes,omitempty"`
-	Source          *JobExecutionSource `json:"source,omitempty"`
+	SchemaVersion   int                  `json:"schemaVersion"`
+	Operation       string               `json:"operation"`
+	StorageTargetID string               `json:"storageTargetId"`
+	Provider        string               `json:"provider"`
+	RelativePath    string               `json:"relativePath"`
+	BlobID          string               `json:"blobId,omitempty"`
+	AssetID         string               `json:"assetId,omitempty"`
+	ChecksumSHA256  string               `json:"checksumSha256"`
+	SizeBytes       int64                `json:"sizeBytes,omitempty"`
+	Source          *JobExecutionSource  `json:"source,omitempty"`
+	RestoreDrillID  string               `json:"restoreDrillId,omitempty"`
+	Samples         []RestoreDrillSample `json:"samples,omitempty"`
+}
+
+type RestoreDrillSample struct {
+	AssetID         string                   `json:"assetId"`
+	CandidateStatus string                   `json:"candidateStatus"`
+	Source          RestoreDrillSampleSource `json:"source"`
+}
+
+type RestoreDrillSampleSource struct {
+	StorageTargetID string `json:"storageTargetId"`
+	Provider        string `json:"provider"`
+	RelativePath    string `json:"relativePath"`
+	BlobID          string `json:"blobId,omitempty"`
+	ChecksumSHA256  string `json:"checksumSha256"`
+	SizeBytes       int64  `json:"sizeBytes,omitempty"`
 }
 
 type ClaimJobRequest struct {
@@ -141,7 +158,38 @@ type FetchHostedStagingSourceRequest struct {
 	LeaseToken string `json:"leaseToken"`
 }
 
+type RecordRestoreDrillEvidenceRequest struct {
+	AssetID         string `json:"assetId"`
+	StorageTargetID string `json:"storageTargetId,omitempty"`
+	CandidateStatus string `json:"candidateStatus"`
+	EvidenceStatus  string `json:"evidenceStatus"`
+	ChecksumSHA256  string `json:"checksumSha256,omitempty"`
+	SafeErrorClass  string `json:"safeErrorClass,omitempty"`
+	Summary         string `json:"summary"`
+}
+
+type RecordRestoreDrillEvidenceResponse struct {
+	Drill    RestoreDrill         `json:"drill"`
+	Evidence RestoreDrillEvidence `json:"evidence"`
+}
+
+type RestoreDrill struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+type RestoreDrillEvidence struct {
+	ID             string `json:"id"`
+	AssetID        string `json:"assetId"`
+	EvidenceStatus string `json:"evidenceStatus"`
+}
+
 type HostedStagingFetcher struct {
+	Client     *Client
+	Credential string
+}
+
+type RestoreDrillEvidenceRecorder struct {
 	Client     *Client
 	Credential string
 }
@@ -272,12 +320,31 @@ func (c *Client) FetchHostedStagingSource(ctx context.Context, credential string
 	return response.Body, nil
 }
 
+func (c *Client) RecordRestoreDrillEvidence(ctx context.Context, credential string, restoreDrillID string, request RecordRestoreDrillEvidenceRequest) (RecordRestoreDrillEvidenceResponse, error) {
+	responseBody := RecordRestoreDrillEvidenceResponse{}
+	err := c.doJSON(ctx, http.MethodPost, "/v1/restore/drills/"+url.PathEscape(restoreDrillID)+"/evidence", request, credential, &responseBody)
+	if err != nil {
+		return RecordRestoreDrillEvidenceResponse{}, err
+	}
+
+	return responseBody, nil
+}
+
 func (f HostedStagingFetcher) FetchHostedStagingSource(ctx context.Context, claim ClaimedJob, stagingObjectID string) (io.ReadCloser, error) {
 	if f.Client == nil {
 		return nil, fmt.Errorf("control plane client is not configured")
 	}
 
 	return f.Client.FetchHostedStagingSource(ctx, f.Credential, claim.Job.ID, stagingObjectID, claim.Lease.LeaseToken)
+}
+
+func (r RestoreDrillEvidenceRecorder) RecordRestoreDrillEvidence(ctx context.Context, restoreDrillID string, request RecordRestoreDrillEvidenceRequest) error {
+	if r.Client == nil {
+		return fmt.Errorf("control plane client is not configured")
+	}
+
+	_, err := r.Client.RecordRestoreDrillEvidence(ctx, r.Credential, restoreDrillID, request)
+	return err
 }
 
 func (c *Client) doJSON(ctx context.Context, method string, path string, body any, bearerToken string, target any) error {

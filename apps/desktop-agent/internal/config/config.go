@@ -18,6 +18,7 @@ type Config struct {
 	DeviceCredential     string
 	DeviceCredentialPath string
 	StorageBindingsPath  string
+	RestoreDrillRootPath string
 	AgentVersion         string
 }
 
@@ -45,6 +46,7 @@ func Load() (Config, error) {
 		DeviceCredential:     os.Getenv("LIFE_LOOP_DEVICE_CREDENTIAL"),
 		DeviceCredentialPath: getEnv("LIFE_LOOP_DEVICE_CREDENTIAL_PATH", defaultCredentialPath()),
 		StorageBindingsPath:  getEnv("LIFE_LOOP_STORAGE_BINDINGS_PATH", defaultStorageBindingsPath()),
+		RestoreDrillRootPath: os.Getenv("LIFE_LOOP_RESTORE_DRILL_ROOT_PATH"),
 		AgentVersion:         getEnv("LIFE_LOOP_AGENT_VERSION", "0.0.1-dev"),
 	}, nil
 }

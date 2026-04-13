@@ -1,11 +1,11 @@
 # 25. MVP Audit Status
 
-This audit records the current implementation state after the Phase 1 foundation, job execution, desktop verification, hosted-staging archive handoff, restore evidence, cleanup readiness, iPhone staging foundation, and production hardening slices.
+This audit records the current implementation state after the Phase 1 foundation, job execution, desktop verification, hosted-staging archive handoff, restore evidence, desktop restore-drill execution, cleanup readiness, iPhone staging foundation, and production hardening slices.
 
 ## Verdict
 The repository is a strong MVP foundation, but it is not yet an end-to-end complete product.
 
-A developer can clone the repo, install dependencies, start local infrastructure, run migrations, start web/API/agent foundations, validate health endpoints, run CI-quality checks, and run an explicit DB-backed hosted-staging archive handoff smoke. The full acceptance flow is still incomplete because automated restore execution, manual cleanup-review execution, full iOS app packaging, production image build/publish, and live VPS health validation remain open.
+A developer can clone the repo, install dependencies, start local infrastructure, run migrations, start web/API/agent foundations, validate health endpoints, run CI-quality checks, and run an explicit DB-backed hosted-staging archive handoff smoke. The full acceptance flow is still incomplete because the restore-drill manifest builder/end-to-end UI flow, manual cleanup-review execution, full iOS app packaging, production image build/publish, and live VPS health validation remain open.
 
 ## Completed
 - Monorepo foundation with pnpm workspaces, Turborepo, TypeScript, Biome, CI, docs checks, compose validation, and production baseline validation.
@@ -18,16 +18,16 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Lease-authorized hosted-staging archive fetch API that streams bytes without exposing raw storage paths and only moves staging objects to `archiving`, not verified or cleanup-eligible.
 - DB-backed hosted-staging archive handoff smoke via `pnpm test:db:api`, covering reservation/upload, desktop claim scoping, invalid lease rejection, staged-byte fetch, verified placement ingest reporting, and expired object rejection.
 - Restore drill evidence model/API/web surface per ADR-020, clearly separated from metadata-only restore readiness; verified evidence is gated on a matching healthy verified original placement.
+- Desktop-agent restore-drill executor per ADR-023, with agent-local restore workspace, checksum verification, per-sample evidence reporting, and safe blocked/failed classes without raw local path upload.
 - Read-only manual cleanup readiness API/web surface that requires verified primary, verified replica, and asset-level restore-drill evidence.
 - iPhone hosted-staging API/storage abstraction and SwiftPM SwiftUI foundation per ADR-021, without treating upload as archive safety.
 - Production VPS baseline under `/opt/life-loop` with Compose template, env example, healthchecks, backup/restore notes, and rollback runbook.
 
 ## Not Complete
 - `archive-placement` byte movement is implemented for `hosted-staging` jobs with a valid ADR-019 execution manifest and ADR-022 lease-authorized fetch; `agent-local-staging` remains safely blocked until a local source manifest exists.
-- Restore drill execution is not automated. The API can schedule drills and record placement-backed evidence, but there is no data-plane restore executor.
+- Restore-drill data-plane execution exists for ADR-023 claim manifests, but a control-plane manifest builder and end-to-end web/API flow are still needed before a user can run the complete restore-drill acceptance path without manual manifest construction.
 - Cleanup remains read-only/manual-review readiness. There is no cleanup-review job execution UI and no delete behavior, by design.
 - iOS is a SwiftPM foundation with PhotosPicker/status/upload request construction, not a signed app target with full background upload lifecycle integration.
-- Desktop-agent restore-drill execution semantics are documented in ADR-023; API evidence recording is covered, but agent restore reporting is not implemented.
 - Production image build/publish workflow is not implemented. The Compose template expects externally built API/web images.
 - Live VPS health checks and rollback drills have not been run against deployed services.
 
@@ -39,7 +39,7 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Reduced motion: design-system rules and web patterns exist; iOS foundation has minimal motion and still needs app-level accessibility QA.
 
 ## Next Execution Order
-1. Implement desktop-agent restore-drill evidence reporting from ADR-023 manifests.
+1. Implement control-plane restore-drill manifest builder and end-to-end web/API flow using ADR-023 manifests.
 2. Implement manual cleanup-review workflow states without delete automation.
 3. Add production image build/publish templates and validate them in CI or a documented local build path.
 4. Run a final acceptance pass: local infra, migrations, web/API/agent, device enrollment, storage binding, staging ingest, archive/verify, restore drill, cleanup readiness, and CI-quality checks.

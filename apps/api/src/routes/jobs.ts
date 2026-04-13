@@ -47,22 +47,67 @@ const executionSourceSchema = z.discriminatedUnion('kind', [
   }),
 ])
 
-const executionManifestSchema = z.object({
+const checksumSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-f0-9]{64}$/i)
+  .transform((checksum) => checksum.toLowerCase())
+
+const storageTargetRelativePathSchema = z.string().trim().min(1).max(1024)
+
+const archivePlacementExecutionManifestSchema = z.object({
   schemaVersion: z.literal(1),
-  operation: z.enum(['archive-placement', 'placement-verification']),
+  operation: z.literal('archive-placement'),
   storageTargetId: z.string().trim().min(1).max(191),
   provider: z.string().trim().min(1).max(120),
-  relativePath: z.string().trim().min(1).max(1024),
+  relativePath: storageTargetRelativePathSchema,
   blobId: z.string().uuid().optional(),
   assetId: z.string().uuid().optional(),
-  checksumSha256: z
-    .string()
-    .trim()
-    .regex(/^[a-f0-9]{64}$/i)
-    .transform((checksum) => checksum.toLowerCase()),
+  checksumSha256: checksumSchema,
   sizeBytes: z.coerce.number().int().min(0).optional(),
   source: executionSourceSchema.optional(),
 })
+
+const placementVerificationExecutionManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operation: z.literal('placement-verification'),
+  storageTargetId: z.string().trim().min(1).max(191),
+  provider: z.string().trim().min(1).max(120),
+  relativePath: storageTargetRelativePathSchema,
+  blobId: z.string().uuid().optional(),
+  assetId: z.string().uuid().optional(),
+  checksumSha256: checksumSchema,
+  sizeBytes: z.coerce.number().int().min(0).optional(),
+})
+
+const restoreDrillExecutionManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operation: z.literal('restore-drill'),
+  restoreDrillId: z.string().trim().uuid().optional(),
+  samples: z
+    .array(
+      z.object({
+        assetId: z.string().uuid(),
+        candidateStatus: z.enum(['ready', 'degraded', 'blocked']),
+        source: z.object({
+          storageTargetId: z.string().trim().min(1).max(191),
+          provider: z.string().trim().min(1).max(120),
+          relativePath: storageTargetRelativePathSchema,
+          blobId: z.string().uuid().optional(),
+          checksumSha256: checksumSchema,
+          sizeBytes: z.coerce.number().int().min(0).optional(),
+        }),
+      }),
+    )
+    .min(1)
+    .max(50),
+})
+
+const executionManifestSchema = z.discriminatedUnion('operation', [
+  archivePlacementExecutionManifestSchema,
+  placementVerificationExecutionManifestSchema,
+  restoreDrillExecutionManifestSchema,
+])
 
 const createJobSchema = z.object({
   libraryId: z.string().uuid(),

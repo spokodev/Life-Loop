@@ -49,10 +49,13 @@ function validateExecutionManifestForCreate(input: CreateJobInput) {
   }
 
   if (
-    manifest.operation !== 'archive-placement' &&
-    manifest.operation !== 'placement-verification'
+    !['archive-placement', 'placement-verification', 'restore-drill'].includes(manifest.operation)
   ) {
     return 'Execution manifest operation is unsupported.'
+  }
+
+  if (manifest.operation === 'restore-drill') {
+    return validateRestoreDrillExecutionManifest(manifest)
   }
 
   if (!manifest.storageTargetId.trim()) {
@@ -86,12 +89,61 @@ function validateExecutionManifestForCreate(input: CreateJobInput) {
     return 'Archive-placement execution manifests require a source reference.'
   }
 
-  if (manifest.source?.kind === 'hosted-staging' && !manifest.source.stagingObjectId?.trim()) {
-    return 'Hosted-staging execution manifests require a staging object id.'
+  if (manifest.operation === 'archive-placement') {
+    if (manifest.source?.kind === 'hosted-staging' && !manifest.source.stagingObjectId?.trim()) {
+      return 'Hosted-staging execution manifests require a staging object id.'
+    }
+
+    if (manifest.source?.kind === 'agent-local-staging' && !manifest.source.localSourceId?.trim()) {
+      return 'Agent-local-staging execution manifests require a local source id.'
+    }
   }
 
-  if (manifest.source?.kind === 'agent-local-staging' && !manifest.source.localSourceId?.trim()) {
-    return 'Agent-local-staging execution manifests require a local source id.'
+  return null
+}
+
+function validateRestoreDrillExecutionManifest(
+  manifest: Extract<CreateJobInput['execution'], { operation: 'restore-drill' }>,
+) {
+  if (!manifest) {
+    return 'Restore-drill execution manifest is required.'
+  }
+
+  if (manifest.restoreDrillId !== undefined && !manifest.restoreDrillId.trim()) {
+    return 'Restore-drill execution manifests require a restore drill id.'
+  }
+
+  if (manifest.samples.length < 1 || manifest.samples.length > 50) {
+    return 'Restore-drill execution manifests require one to fifty samples.'
+  }
+
+  for (const sample of manifest.samples) {
+    if (!sample.assetId.trim()) {
+      return 'Restore-drill execution samples require an asset id.'
+    }
+
+    if (!sample.source.storageTargetId.trim()) {
+      return 'Restore-drill execution samples require a storage target id.'
+    }
+
+    if (!sample.source.provider.trim()) {
+      return 'Restore-drill execution samples require a provider.'
+    }
+
+    if (!isSafeRelativePath(sample.source.relativePath)) {
+      return 'Restore-drill execution sample relative paths must stay within the storage target root.'
+    }
+
+    if (!/^[a-f0-9]{64}$/.test(sample.source.checksumSha256)) {
+      return 'Restore-drill execution sample checksums must be lowercase sha256 hex digests.'
+    }
+
+    if (
+      sample.source.sizeBytes !== undefined &&
+      (!Number.isInteger(sample.source.sizeBytes) || sample.source.sizeBytes < 0)
+    ) {
+      return 'Restore-drill execution sample sizeBytes must be a non-negative integer.'
+    }
   }
 
   return null

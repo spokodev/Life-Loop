@@ -132,6 +132,39 @@ test('job claims are unique, lease-scoped, recoverable, and device-library scope
   assert.equal(recoveredClaim.recoveredExpiredCount, 1)
   assert.equal(recoveredClaim.claim?.job.id, recoverableJob.id)
   assert.equal(recoveredClaim.claim.job.attemptCount, 1)
+
+  const restoreDrillCreate = await postJson<{
+    job: { id: string }
+    restoreDrill: { id: string }
+  }>('/v1/jobs', {
+    execution: {
+      schemaVersion: 1,
+      operation: 'restore-drill',
+      samples: [
+        {
+          assetId: randomUUID(),
+          candidateStatus: 'ready',
+          source: {
+            storageTargetId: 'target-1',
+            provider: 'local-disk',
+            relativePath: '2026/04/original.bin',
+            checksumSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        },
+      ],
+    },
+    kind: 'restore-drill',
+    libraryId: primaryLibrary.id,
+    requestedBy: {
+      email: primaryOwnerEmail,
+    },
+  })
+  const restoreDrillClaim = await claimJobs(firstDevice.credential.token, ['restore-drill'])
+  assert.equal(restoreDrillClaim.claim?.job.id, restoreDrillCreate.job.id)
+  assert.equal(
+    restoreDrillClaim.claim.execution?.restoreDrillId,
+    restoreDrillCreate.restoreDrill.id,
+  )
 })
 
 async function createLibrary(ownerEmail: string, slug: string) {
@@ -192,6 +225,10 @@ async function claimJobs(credential: string, kinds: string[]) {
       job: {
         attemptCount: number
         id: string
+      }
+      execution?: {
+        operation: string
+        restoreDrillId?: string
       }
       lease: {
         leaseToken: string

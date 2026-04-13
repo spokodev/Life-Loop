@@ -265,7 +265,7 @@ func (s Service) pollAndExecuteOneJob(ctx context.Context, storedCredential cred
 	}
 
 	claimResponse, err := s.client.ClaimJob(ctx, storedCredential.Credential, controlplane.ClaimJobRequest{
-		Kinds:        []string{"archive-placement", "placement-verification"},
+		Kinds:        []string{"archive-placement", "placement-verification", "restore-drill"},
 		LeaseSeconds: 300,
 	})
 	if err != nil {
@@ -299,6 +299,8 @@ func (s Service) pollAndExecuteOneJob(ctx context.Context, storedCredential cred
 		Bindings:          bindingsFile,
 		HostedStaging:     controlplane.HostedStagingFetcher{Client: s.client, Credential: storedCredential.Credential},
 		LocalDiskProvider: storage.LocalDiskProvider{},
+		RestoreEvidence:   controlplane.RestoreDrillEvidenceRecorder{Client: s.client, Credential: storedCredential.Credential},
+		RestoreWorkspace:  s.config.RestoreDrillRootPath,
 	}
 	result := runner.Execute(ctx, claim)
 

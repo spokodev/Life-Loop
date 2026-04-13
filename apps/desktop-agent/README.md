@@ -50,11 +50,13 @@ Rules:
 - missing binding files do not stop heartbeat, but archive execution remains blocked until bindings exist.
 
 ## Job execution
-After each heartbeat interval, the agent makes one bounded claim request for `archive-placement` and `placement-verification` jobs.
+After each heartbeat interval, the agent makes one bounded claim request for `archive-placement`, `placement-verification`, and `restore-drill` jobs.
 
 Execution rules:
 - job claims use the device credential and a server-issued lease token.
 - `placement-verification` verifies the checksum at `binding.rootPath + execution.relativePath`.
-- `archive-placement` remains blocked until the job includes a supported non-path source reference from ADR-019.
+- `archive-placement` moves bytes for hosted-staging manifests through the lease-authorized fetch route and remains blocked for unsupported source references.
+- `restore-drill` copies sampled local-disk placements into `LIFE_LOOP_RESTORE_DRILL_ROOT_PATH`, verifies checksums, and reports per-sample evidence with safe status/error classes.
+- restore-drill workspace artifacts are agent-local drill artifacts only; they are not cleanup eligibility and must not delete originals, phone assets, archive placements, or hosted staging objects.
 - missing manifests, missing bindings, provider mismatches, unsupported providers, unavailable disks, and checksum mismatches complete the claim as `blocked` with a safe error class.
 - completion reports do not include raw local filesystem paths.

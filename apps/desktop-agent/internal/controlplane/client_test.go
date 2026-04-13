@@ -243,6 +243,70 @@ func TestCompleteJobClaimPostsLeaseAndSafeErrorClass(t *testing.T) {
 	}
 }
 
+func TestRecordRestoreDrillEvidencePostsSafeEvidence(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", request.Method)
+		}
+
+		if request.URL.Path != "/v1/restore/drills/drill-1/evidence" {
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+
+		if got := request.Header.Get("Authorization"); got != "Bearer credential-1" {
+			t.Fatalf("unexpected authorization header: %s", got)
+		}
+
+		body := RecordRestoreDrillEvidenceRequest{}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+
+		if body.AssetID != "asset-1" || body.StorageTargetID != "target-1" || body.EvidenceStatus != "verified" || body.ChecksumSHA256 == "" {
+			t.Fatalf("unexpected evidence body: %#v", body)
+		}
+
+		response.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(response).Encode(RecordRestoreDrillEvidenceResponse{
+			Drill: RestoreDrill{
+				ID:     "drill-1",
+				Status: "passed",
+			},
+			Evidence: RestoreDrillEvidence{
+				ID:             "evidence-1",
+				AssetID:        "asset-1",
+				EvidenceStatus: "verified",
+			},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := &Client{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+	}
+
+	response, err := client.RecordRestoreDrillEvidence(context.Background(), "credential-1", "drill-1", RecordRestoreDrillEvidenceRequest{
+		AssetID:         "asset-1",
+		StorageTargetID: "target-1",
+		CandidateStatus: "ready",
+		EvidenceStatus:  "verified",
+		ChecksumSHA256:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Summary:         "Restore drill sample was copied and checksum verified.",
+	})
+	if err != nil {
+		t.Fatalf("RecordRestoreDrillEvidence returned error: %v", err)
+	}
+
+	if response.Drill.Status != "passed" || response.Evidence.EvidenceStatus != "verified" {
+		t.Fatalf("unexpected response: %#v", response)
+	}
+}
+
 func TestFetchHostedStagingSourcePostsLeaseAndReturnsStream(t *testing.T) {
 	t.Parallel()
 

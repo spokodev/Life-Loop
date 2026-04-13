@@ -16,19 +16,24 @@ import (
 )
 
 const (
-	StatusSucceeded = "succeeded"
-	StatusBlocked   = "blocked"
+	StatusSucceeded             = "succeeded"
+	StatusCompletedWithWarnings = "completed_with_warnings"
+	StatusBlocked               = "blocked"
+	StatusFailed                = "failed"
 
-	SafeErrorMissingManifest     = "missing_execution_manifest"
-	SafeErrorInvalidManifest     = "invalid_execution_manifest"
-	SafeErrorMissingBinding      = "missing_binding"
-	SafeErrorProviderMismatch    = "provider_mismatch"
-	SafeErrorUnsupportedJob      = "unsupported_job_kind"
-	SafeErrorUnsupportedSource   = "unsupported_source"
-	SafeErrorUnsupportedProvider = "unsupported_provider"
-	SafeErrorDiskUnavailable     = "disk_unavailable"
-	SafeErrorChecksumMismatch    = "checksum_mismatch"
-	SafeErrorHostedStagingFetch  = "hosted_staging_fetch_failed"
+	SafeErrorMissingManifest          = "missing_execution_manifest"
+	SafeErrorInvalidManifest          = "invalid_execution_manifest"
+	SafeErrorMissingBinding           = "missing_binding"
+	SafeErrorProviderMismatch         = "provider_mismatch"
+	SafeErrorUnsupportedJob           = "unsupported_job_kind"
+	SafeErrorUnsupportedSource        = "unsupported_source"
+	SafeErrorUnsupportedProvider      = "unsupported_provider"
+	SafeErrorDiskUnavailable          = "disk_unavailable"
+	SafeErrorChecksumMismatch         = "checksum_mismatch"
+	SafeErrorHostedStagingFetch       = "hosted_staging_fetch_failed"
+	SafeErrorMissingRestoreRoot       = "missing_restore_workspace"
+	SafeErrorRestoreReportFailed      = "restore_evidence_report_failed"
+	SafeErrorRestoreSamplesNeedReview = "restore_samples_need_review"
 )
 
 type Result struct {
@@ -41,10 +46,16 @@ type Runner struct {
 	Bindings          bindings.File
 	HostedStaging     HostedStagingFetcher
 	LocalDiskProvider storage.LocalDiskProvider
+	RestoreEvidence   RestoreEvidenceRecorder
+	RestoreWorkspace  string
 }
 
 type HostedStagingFetcher interface {
 	FetchHostedStagingSource(ctx context.Context, claim controlplane.ClaimedJob, stagingObjectID string) (io.ReadCloser, error)
+}
+
+type RestoreEvidenceRecorder interface {
+	RecordRestoreDrillEvidence(ctx context.Context, restoreDrillID string, request controlplane.RecordRestoreDrillEvidenceRequest) error
 }
 
 var checksumPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -59,32 +70,52 @@ func (r Runner) Execute(ctx context.Context, claim controlplane.ClaimedJob) Resu
 		return blocked(SafeErrorInvalidManifest, err.Error())
 	}
 
+	switch claim.Job.Kind {
+	case "placement-verification":
+		binding, destinationPath, result := r.resolveDestination(*manifest)
+		if result != nil {
+			return *result
+		}
+
+		return r.verifyPlacement(ctx, binding.RootPath, destinationPath, manifest.ChecksumSHA256)
+	case "archive-placement":
+		binding, destinationPath, result := r.resolveDestination(*manifest)
+		if result != nil {
+			return *result
+		}
+
+		return r.placeArchive(ctx, claim, binding.RootPath, destinationPath, *manifest)
+	case "restore-drill":
+		return r.restoreDrill(ctx, claim, *manifest)
+	default:
+		return blocked(SafeErrorUnsupportedJob, "Job kind is not supported by the MVP desktop executor.")
+	}
+}
+
+func (r Runner) resolveDestination(manifest controlplane.JobExecutionManifest) (bindings.StorageTargetBinding, string, *Result) {
 	binding, exists := r.Bindings.Find(manifest.StorageTargetID)
 	if !exists {
-		return blocked(SafeErrorMissingBinding, "No local binding exists for the requested storage target.")
+		result := blocked(SafeErrorMissingBinding, "No local binding exists for the requested storage target.")
+		return bindings.StorageTargetBinding{}, "", &result
 	}
 
 	if bindings.NormalizeProvider(binding.Provider) != bindings.NormalizeProvider(manifest.Provider) {
-		return blocked(SafeErrorProviderMismatch, "Local binding provider does not match the job execution manifest.")
+		result := blocked(SafeErrorProviderMismatch, "Local binding provider does not match the job execution manifest.")
+		return bindings.StorageTargetBinding{}, "", &result
 	}
 
 	if !isLocalDiskProvider(binding.Provider) {
-		return blocked(SafeErrorUnsupportedProvider, "Storage provider is not supported by the MVP desktop executor.")
+		result := blocked(SafeErrorUnsupportedProvider, "Storage provider is not supported by the MVP desktop executor.")
+		return bindings.StorageTargetBinding{}, "", &result
 	}
 
 	destinationPath, err := safeJoin(binding.RootPath, manifest.RelativePath)
 	if err != nil {
-		return blocked(SafeErrorInvalidManifest, err.Error())
+		result := blocked(SafeErrorInvalidManifest, err.Error())
+		return bindings.StorageTargetBinding{}, "", &result
 	}
 
-	switch claim.Job.Kind {
-	case "placement-verification":
-		return r.verifyPlacement(ctx, binding.RootPath, destinationPath, manifest.ChecksumSHA256)
-	case "archive-placement":
-		return r.placeArchive(ctx, claim, binding.RootPath, destinationPath, *manifest)
-	default:
-		return blocked(SafeErrorUnsupportedJob, "Job kind is not supported by the MVP desktop executor.")
-	}
+	return binding, destinationPath, nil
 }
 
 func (r Runner) verifyPlacement(ctx context.Context, rootPath string, destinationPath string, checksum string) Result {
@@ -179,6 +210,135 @@ func (r Runner) placeHostedStagingArchive(ctx context.Context, claim controlplan
 	}
 }
 
+func (r Runner) restoreDrill(ctx context.Context, claim controlplane.ClaimedJob, manifest controlplane.JobExecutionManifest) Result {
+	if r.RestoreEvidence == nil {
+		return blocked(SafeErrorRestoreReportFailed, "Restore evidence recorder is not configured.")
+	}
+
+	if r.RestoreWorkspace == "" {
+		return r.blockRestoreDrill(ctx, manifest, SafeErrorMissingRestoreRoot, "Restore drill workspace is not configured.")
+	}
+
+	if err := r.LocalDiskProvider.Health(ctx, storage.HealthRequest{RootPath: r.RestoreWorkspace}); err != nil {
+		return r.blockRestoreDrill(ctx, manifest, SafeErrorDiskUnavailable, "Restore drill workspace is unavailable or not a directory.")
+	}
+
+	verifiedCount := 0
+	blockedCount := 0
+
+	for _, sample := range manifest.Samples {
+		result := r.restoreDrillSample(ctx, claim, manifest.RestoreDrillID, sample)
+		if result.SafeErrorClass == SafeErrorRestoreReportFailed {
+			return result
+		}
+
+		if result.Status == StatusSucceeded {
+			verifiedCount++
+			continue
+		}
+
+		blockedCount++
+	}
+
+	if verifiedCount == len(manifest.Samples) {
+		return Result{
+			Status: StatusSucceeded,
+			Reason: fmt.Sprintf("Restore drill verified %d sampled assets.", verifiedCount),
+		}
+	}
+
+	return Result{
+		Status:         StatusCompletedWithWarnings,
+		Reason:         fmt.Sprintf("Restore drill verified %d/%d sampled assets; %d samples need review.", verifiedCount, len(manifest.Samples), blockedCount),
+		SafeErrorClass: SafeErrorRestoreSamplesNeedReview,
+	}
+}
+
+func (r Runner) restoreDrillSample(ctx context.Context, claim controlplane.ClaimedJob, restoreDrillID string, sample controlplane.RestoreDrillSample) Result {
+	binding, exists := r.Bindings.Find(sample.Source.StorageTargetID)
+	if !exists {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorMissingBinding, "Restore source binding is not configured.")
+	}
+
+	if bindings.NormalizeProvider(binding.Provider) != bindings.NormalizeProvider(sample.Source.Provider) {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorProviderMismatch, "Restore source provider does not match the local binding.")
+	}
+
+	if !isLocalDiskProvider(binding.Provider) {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorUnsupportedProvider, "Restore source provider is not supported by the MVP desktop executor.")
+	}
+
+	if err := r.LocalDiskProvider.Health(ctx, storage.HealthRequest{RootPath: binding.RootPath}); err != nil {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorDiskUnavailable, "Restore source target is unavailable or not a directory.")
+	}
+
+	sourcePath, err := safeJoin(binding.RootPath, sample.Source.RelativePath)
+	if err != nil {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorInvalidManifest, "Restore source relative path is invalid.")
+	}
+
+	destinationPath, err := safeJoin(filepath.Join(r.RestoreWorkspace, "restore-drills", claim.Job.ID), filepath.Join(sample.AssetID, filepath.Base(sample.Source.RelativePath)))
+	if err != nil {
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorInvalidManifest, "Restore destination could not be derived safely.")
+	}
+
+	if _, err := r.LocalDiskProvider.Put(ctx, storage.PutRequest{
+		SourcePath:       sourcePath,
+		DestinationPath:  destinationPath,
+		ExpectedChecksum: sample.Source.ChecksumSHA256,
+	}); err != nil {
+		if errors.Is(err, storage.ErrChecksumMismatch) {
+			return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "failed", SafeErrorChecksumMismatch, "Restore source checksum did not match the expected blob checksum.")
+		}
+
+		return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "blocked", SafeErrorDiskUnavailable, "Restore sample could not be copied into the local drill workspace.")
+	}
+
+	return r.recordRestoreEvidence(ctx, restoreDrillID, sample, "verified", "", "Restore drill sample was copied and checksum verified.")
+}
+
+func (r Runner) blockRestoreDrill(ctx context.Context, manifest controlplane.JobExecutionManifest, safeErrorClass string, summary string) Result {
+	for _, sample := range manifest.Samples {
+		result := r.recordRestoreEvidence(ctx, manifest.RestoreDrillID, sample, "blocked", safeErrorClass, summary)
+		if result.SafeErrorClass == SafeErrorRestoreReportFailed {
+			return result
+		}
+	}
+
+	return blocked(safeErrorClass, summary)
+}
+
+func (r Runner) recordRestoreEvidence(ctx context.Context, restoreDrillID string, sample controlplane.RestoreDrillSample, evidenceStatus string, safeErrorClass string, summary string) Result {
+	request := controlplane.RecordRestoreDrillEvidenceRequest{
+		AssetID:         sample.AssetID,
+		CandidateStatus: sample.CandidateStatus,
+		EvidenceStatus:  evidenceStatus,
+		Summary:         summary,
+	}
+
+	if sample.Source.StorageTargetID != "" {
+		request.StorageTargetID = sample.Source.StorageTargetID
+	}
+
+	if evidenceStatus == "verified" {
+		request.ChecksumSHA256 = sample.Source.ChecksumSHA256
+	}
+
+	if safeErrorClass != "" {
+		request.SafeErrorClass = safeErrorClass
+	}
+
+	if err := r.RestoreEvidence.RecordRestoreDrillEvidence(ctx, restoreDrillID, request); err != nil {
+		return blocked(SafeErrorRestoreReportFailed, "Restore drill evidence could not be reported to the control plane.")
+	}
+
+	if evidenceStatus == "verified" {
+		return Result{Status: StatusSucceeded, Reason: summary}
+	}
+
+	return Result{Status: StatusBlocked, Reason: summary, SafeErrorClass: safeErrorClass}
+}
+
 func validateManifest(jobKind string, manifest controlplane.JobExecutionManifest) error {
 	if manifest.SchemaVersion != 1 {
 		return fmt.Errorf("Execution manifest schema version is unsupported.")
@@ -188,8 +348,34 @@ func validateManifest(jobKind string, manifest controlplane.JobExecutionManifest
 		return fmt.Errorf("Execution manifest operation does not match the claimed job kind.")
 	}
 
-	if manifest.Operation != "archive-placement" && manifest.Operation != "placement-verification" {
+	if manifest.Operation != "archive-placement" && manifest.Operation != "placement-verification" && manifest.Operation != "restore-drill" {
 		return fmt.Errorf("Execution manifest operation is unsupported.")
+	}
+
+	if manifest.Operation == "restore-drill" {
+		if manifest.RestoreDrillID == "" {
+			return fmt.Errorf("Restore drill execution manifest is missing a restore drill id.")
+		}
+
+		if len(manifest.Samples) < 1 || len(manifest.Samples) > 50 {
+			return fmt.Errorf("Restore drill execution manifest requires one to fifty samples.")
+		}
+
+		for _, sample := range manifest.Samples {
+			if sample.AssetID == "" || sample.CandidateStatus == "" || sample.Source.StorageTargetID == "" || sample.Source.Provider == "" || sample.Source.RelativePath == "" {
+				return fmt.Errorf("Restore drill execution sample is missing required metadata.")
+			}
+
+			if !checksumPattern.MatchString(sample.Source.ChecksumSHA256) {
+				return fmt.Errorf("Restore drill execution sample checksum is invalid.")
+			}
+
+			if _, err := safeJoin("restore-source-root", sample.Source.RelativePath); err != nil {
+				return fmt.Errorf("Restore drill execution sample relative path is invalid.")
+			}
+		}
+
+		return nil
 	}
 
 	if manifest.StorageTargetID == "" {
