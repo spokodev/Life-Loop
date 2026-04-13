@@ -27,7 +27,7 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Restore drill execution is not automated. The API can schedule drills and record placement-backed evidence, but there is no data-plane restore executor.
 - Cleanup remains read-only/manual-review readiness. There is no cleanup-review job execution UI and no delete behavior, by design.
 - iOS is a SwiftPM foundation with PhotosPicker/status/upload request construction, not a signed app target with full background upload lifecycle integration.
-- DB-backed integration tests for concurrent job claims/device scoping are still missing; current coverage is unit-heavy.
+- Desktop-agent restore-drill execution remains blocked on documented sample manifest and restore destination semantics; API evidence recording is covered, but agent restore reporting is not implemented.
 - Production image build/publish workflow is not implemented. The Compose template expects externally built API/web images.
 - Live VPS health checks and rollback drills have not been run against deployed services.
 
@@ -39,8 +39,7 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Reduced motion: design-system rules and web patterns exist; iOS foundation has minimal motion and still needs app-level accessibility QA.
 
 ## Next Execution Order
-1. Implement desktop-agent restore-drill evidence reporting now that API pass semantics are evidence-gated.
-2. Add DB-backed duplicate-claim concurrency coverage for ADR-018.
-3. Implement manual cleanup-review workflow states without delete automation.
-4. Add production image build/publish templates and validate them in CI or a documented local build path.
-5. Run a final acceptance pass: local infra, migrations, web/API/agent, device enrollment, storage binding, staging ingest, archive/verify, restore drill, cleanup readiness, and CI-quality checks.
+1. Add an ADR update for desktop restore-drill sample manifests and restore destination semantics before implementing agent restore reporting.
+2. Implement manual cleanup-review workflow states without delete automation.
+3. Add production image build/publish templates and validate them in CI or a documented local build path.
+4. Run a final acceptance pass: local infra, migrations, web/API/agent, device enrollment, storage binding, staging ingest, archive/verify, restore drill, cleanup readiness, and CI-quality checks.

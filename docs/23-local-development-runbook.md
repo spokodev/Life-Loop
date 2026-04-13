@@ -116,7 +116,7 @@ With local Postgres running and migrations applied, the hosted-staging archive h
 pnpm test:db:api
 ```
 
-This DB-backed smoke covers iOS staging upload, desktop-device claim scoping, invalid lease rejection, staged-byte fetch, `archiving` status separation from archive safety, a verified placement ingest report, and expired hosted-staging object rejection.
+This DB-backed smoke runs serially because it applies migrations against a shared local database. It covers iOS staging upload, desktop-device claim scoping, invalid lease rejection, staged-byte fetch, `archiving` status separation from archive safety, a verified placement ingest report, expired hosted-staging object rejection, duplicate concurrent job claims, wrong lease completion, required warning reasons, device-targeted jobs, cross-library scoping, terminal jobs, and explicit expired-lease recovery.
 
 Rollback note for migration `0007_job_claim_leases.sql`: before production use, take a database backup; rollback is limited to dropping claim/lease indexes and columns on `job_runs` because the current migration runner is forward-only.
 
