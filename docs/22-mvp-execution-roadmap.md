@@ -61,6 +61,7 @@ This roadmap is the working implementation checklist for completing Life-Loop fr
 
 ### 6. Restore Execution
 - Add explicit restore job semantics distinct from restore-readiness views. **Done:** ADR-020 defines restore-drill evidence as separate from metadata-only readiness and blocks false pass claims until explicit evidence exists.
+- Add desktop restore execution semantics before coding the agent restore executor. **Done:** ADR-023 defines claim-only restore-drill manifests, agent-local restore workspace semantics, safe evidence reporting, and no product cleanup/delete behavior.
 - Implement restore-drill execution for small samples. **Partial:** API records per-asset evidence and rolls up pass/fail only from explicit evidence; verified evidence now requires a matching healthy verified original placement, and operator job transitions cannot mark a drill passed without evidence. Automated data-plane restore execution remains blocked until a restore executor exists.
 - Record drill state and surface pass/fail history in API and web. **Done:** restore evidence has a DB table, device-scoped recording endpoint, drill detail endpoint, and restore page evidence summary.
 - Do not claim restore safety without verified placement and drill evidence. **Done for API safety gate:** DB-backed smoke coverage rejects missing/wrong placement evidence and only passes after explicit verified evidence matches the asset placement.
