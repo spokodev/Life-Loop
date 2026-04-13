@@ -122,6 +122,8 @@ Rollback note for migration `0007_job_claim_leases.sql`: before production use, 
 
 Migration `0008_restore_drill_evidence.sql` adds restore-drill evidence rows. Evidence is separate from restore-readiness metadata: a drill can pass only after sampled assets have explicit `verified` evidence records. Rollback is limited to dropping `restore_drill_evidence` because the current migration runner is forward-only.
 
+Migration `0010_restore_evidence_asset_fk_cascade.sql` normalizes the restore evidence asset foreign key to `on delete cascade` for existing databases. This keeps `asset_id` non-null while preserving clean library/asset deletion during tests and operator cleanup. Rollback requires dropping and recreating that foreign key with the previous action, so take a backup before production migration.
+
 ## Cleanup Review
 Cleanup is manual-only in MVP. The control plane exposes a read-only cleanup review projection:
 

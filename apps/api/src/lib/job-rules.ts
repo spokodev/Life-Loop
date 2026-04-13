@@ -141,10 +141,13 @@ export function mapRestoreDrillFromStatus(currentDrill: RestoreDrill, input: Tra
 
   if (input.status === 'succeeded' || input.status === 'completed_with_warnings') {
     return {
-      status: 'passed' as const,
+      status: currentDrill.status,
       startedAt: currentDrill.startedAt ?? new Date().toISOString(),
-      completedAt: new Date().toISOString(),
-      notes: input.reason ?? currentDrill.notes,
+      completedAt: currentDrill.completedAt,
+      notes:
+        input.reason ??
+        currentDrill.notes ??
+        'Restore drill job completed; drill pass state remains governed by explicit evidence.',
     }
   }
 

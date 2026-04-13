@@ -182,5 +182,14 @@ function mapRestoreError(context: RestoreContext, error: unknown) {
     })
   }
 
+  if (error.message.includes('Verified restore evidence requires')) {
+    return problemJson(context, {
+      title: 'Invalid restore evidence',
+      status: 422,
+      detail: error.message,
+      correlationId: context.get('correlationId'),
+    })
+  }
+
   throw error
 }

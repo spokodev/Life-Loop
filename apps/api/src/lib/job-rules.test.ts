@@ -60,7 +60,7 @@ test('validateJobTransition rejects reopening a terminal job', () => {
   assert.equal(validationMessage, 'Job job-1 is already terminal with status succeeded.')
 })
 
-test('mapRestoreDrillFromStatus maps completed_with_warnings to passed with notes', () => {
+test('mapRestoreDrillFromStatus does not pass restore drills from job status alone', () => {
   const mapped = mapRestoreDrillFromStatus(
     {
       id: 'drill-1',
@@ -75,9 +75,9 @@ test('mapRestoreDrillFromStatus maps completed_with_warnings to passed with note
     },
   )
 
-  assert.equal(mapped.status, 'passed')
+  assert.equal(mapped.status, 'running')
   assert.equal(mapped.notes, 'One source path required manual remapping.')
-  assert.ok(mapped.completedAt)
+  assert.equal(mapped.completedAt, undefined)
 })
 
 test('validateCreateJobInput accepts a safe hosted-staging archive execution manifest', () => {

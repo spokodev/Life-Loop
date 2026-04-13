@@ -7,6 +7,7 @@ import type {
 } from '@life-loop/shared-types'
 import type { PoolClient } from 'pg'
 
+import { validateRestoreDrillEvidenceInput } from '../lib/restore-evidence-rules'
 import { insertAuditEvent } from './audit'
 import { getDatabasePool } from './client'
 import { authenticateDeviceCredential } from './device-auth'
@@ -106,10 +107,20 @@ export async function recordRestoreDrillEvidence(
       throw new Error('Authenticated device does not belong to the restore drill library.')
     }
 
+    const validationMessage = validateRestoreDrillEvidenceInput(input)
+
+    if (validationMessage) {
+      throw new Error(validationMessage)
+    }
+
     await assertAssetBelongsToLibrary(client, input.assetId, drill.libraryId)
 
     if (input.storageTargetId) {
       await assertStorageTargetBelongsToLibrary(client, input.storageTargetId, drill.libraryId)
+    }
+
+    if (input.evidenceStatus === 'verified') {
+      await assertVerifiedOriginalPlacementEvidence(client, input, drill.libraryId)
     }
 
     const evidenceResult = await client.query<RestoreDrillEvidenceRow>(
@@ -321,5 +332,35 @@ async function assertStorageTargetBelongsToLibrary(
 
   if (!result.rows[0]) {
     throw new Error('Storage target does not belong to the restore drill library.')
+  }
+}
+
+async function assertVerifiedOriginalPlacementEvidence(
+  client: PoolClient,
+  input: RecordRestoreDrillEvidenceInput,
+  libraryId: string,
+) {
+  const result = await client.query<{ id: string }>(
+    `
+      select p.id::text
+      from placements p
+      join blobs b on b.id = p.blob_id
+      join storage_targets st on st.id = p.storage_target_id
+      where b.asset_id = $1::uuid
+        and b.kind = 'original'
+        and st.library_id = $2::uuid
+        and st.id = $3::uuid
+        and p.health_state = 'healthy'
+        and p.verified_at is not null
+        and p.checksum_sha256 = $4
+      limit 1
+    `,
+    [input.assetId, libraryId, input.storageTargetId, input.checksumSha256],
+  )
+
+  if (!result.rows[0]) {
+    throw new Error(
+      'Verified restore evidence requires a matching healthy verified original placement.',
+    )
   }
 }

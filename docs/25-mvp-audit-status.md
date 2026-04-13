@@ -17,14 +17,14 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Desktop agent heartbeat, storage-target binding coverage, device credential handling, job claim polling, placement-verification executor, and hosted-staging archive placement executor per ADR-019/ADR-022.
 - Lease-authorized hosted-staging archive fetch API that streams bytes without exposing raw storage paths and only moves staging objects to `archiving`, not verified or cleanup-eligible.
 - DB-backed hosted-staging archive handoff smoke via `pnpm test:db:api`, covering reservation/upload, desktop claim scoping, invalid lease rejection, staged-byte fetch, verified placement ingest reporting, and expired object rejection.
-- Restore drill evidence model/API/web surface per ADR-020, clearly separated from metadata-only restore readiness.
+- Restore drill evidence model/API/web surface per ADR-020, clearly separated from metadata-only restore readiness; verified evidence is gated on a matching healthy verified original placement.
 - Read-only manual cleanup readiness API/web surface that requires verified primary, verified replica, and asset-level restore-drill evidence.
 - iPhone hosted-staging API/storage abstraction and SwiftPM SwiftUI foundation per ADR-021, without treating upload as archive safety.
 - Production VPS baseline under `/opt/life-loop` with Compose template, env example, healthchecks, backup/restore notes, and rollback runbook.
 
 ## Not Complete
 - `archive-placement` byte movement is implemented for `hosted-staging` jobs with a valid ADR-019 execution manifest and ADR-022 lease-authorized fetch; `agent-local-staging` remains safely blocked until a local source manifest exists.
-- Restore drill execution is not automated. The API can schedule drills and record evidence, but there is no data-plane restore executor.
+- Restore drill execution is not automated. The API can schedule drills and record placement-backed evidence, but there is no data-plane restore executor.
 - Cleanup remains read-only/manual-review readiness. There is no cleanup-review job execution UI and no delete behavior, by design.
 - iOS is a SwiftPM foundation with PhotosPicker/status/upload request construction, not a signed app target with full background upload lifecycle integration.
 - DB-backed integration tests for concurrent job claims/device scoping are still missing; current coverage is unit-heavy.
@@ -39,7 +39,7 @@ A developer can clone the repo, install dependencies, start local infrastructure
 - Reduced motion: design-system rules and web patterns exist; iOS foundation has minimal motion and still needs app-level accessibility QA.
 
 ## Next Execution Order
-1. Implement restore-drill executor semantics now that hosted-staging archive placement has a supported data-plane source.
+1. Implement desktop-agent restore-drill evidence reporting now that API pass semantics are evidence-gated.
 2. Add DB-backed duplicate-claim concurrency coverage for ADR-018.
 3. Implement manual cleanup-review workflow states without delete automation.
 4. Add production image build/publish templates and validate them in CI or a documented local build path.
