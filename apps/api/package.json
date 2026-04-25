@@ -18,6 +18,8 @@
     "@hono/node-server": "^1.13.7",
     "@life-loop/config": "workspace:*",
     "@life-loop/shared-types": "workspace:*",
+    "@sentry/node": "^10.50.0",
+    "@sentry/profiling-node": "^10.50.0",
     "hono": "^4.6.14",
     "pg": "^8.13.1",
     "stripe": "^17.7.0",

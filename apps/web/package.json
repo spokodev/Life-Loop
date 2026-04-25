@@ -15,6 +15,7 @@
     "@life-loop/design-tokens": "workspace:*",
     "@life-loop/shared-types": "workspace:*",
     "@life-loop/ui": "workspace:*",
+    "@sentry/nextjs": "^10.50.0",
     "motion": "^11.13.1",
     "next": "^15.2.0",
     "react": "^19.0.0",
